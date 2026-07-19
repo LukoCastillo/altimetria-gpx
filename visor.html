@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Cumbre — visor de perfil de altimetría y distancia a partir de un archivo GPX. Muestra la montaña, los avituallamientos y estadísticas del recorrido. Todo se procesa en tu navegador.">
+<meta name="color-scheme" content="light">
+<title>Cumbre · Visor de altimetría</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  img, svg { max-width: 100%; }
+  :root {
+    /* page chrome tokens (theme-aware) */
+    --bg: #eef0f3;
+    --panel: #ffffff;
+    --ink: #14181e;
+    --ink-soft: #55606e;
+    --ink-mute: #8a93a1;
+    --bg: #eceae3;
+    --panel: #ffffff;
+    --ink: #2b2a24;
+    --ink-soft: #5c5a4e;
+    --ink-mute: #8f8c7e;
+    --line: #ddd9cd;
+    --accent: #6c7a33;
+    --accent-ink: #525e24;
+    --shadow: 0 1px 2px rgba(60,55,35,.06), 0 8px 30px rgba(60,55,35,.1);
+    --radius: 14px;
+    /* poster (the chart) — montaña clara con relleno verde→café */
+    --poster: #f7f5ee;
+    --poster-2: #fcfbf5;
+    --grid: rgba(74,66,40,.13);
+    --grid-strong: rgba(74,66,40,.30);
+    --poster-ink: #3a3729;
+    --poster-mute: rgba(58,55,41,.6);
+    --area-top: #79542e;   /* cumbre: tierra/roca café */
+    --area-mid: #6d6134;   /* olivo terroso */
+    --area-bot: #5c6a33;   /* base: verde musgo terroso */
+    --ridge: #3f4a23;      /* línea de cresta */
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--font); line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
+
+  header.masthead { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 24px; margin-bottom: 22px; }
+  .brand { display: flex; align-items: center; gap: 13px; text-decoration: none; color: inherit; border-radius: 10px; }
+  .brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+  .brand .mark {
+    width: 40px; height: 40px; border-radius: 11px; flex: none;
+    background: linear-gradient(150deg, #79822f, #6a5327);
+    display: grid; place-items: center; box-shadow: var(--shadow);
+  }
+  .brand .mark svg { width: 22px; height: 22px; }
+  .brand h1 { margin: 0; font-size: 1.32rem; font-weight: 800; letter-spacing: -.02em; }
+  .brand p { margin: 1px 0 0; font-size: .82rem; color: var(--ink-mute); letter-spacing: .02em; }
+  .head-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+
+  button, .btn {
+    font: inherit; font-weight: 650; cursor: pointer; border: 1px solid var(--line);
+    background: var(--panel); color: var(--ink); border-radius: 10px;
+    padding: 9px 15px; display: inline-flex; align-items: center; gap: 8px;
+    transition: border-color .15s, transform .05s, background .15s;
+  }
+  button:hover, .btn:hover { border-color: var(--accent); }
+  button:active { transform: translateY(1px); }
+  button:focus-visible, .btn:focus-visible, input:focus-visible, select:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  .btn-primary { background: var(--accent); color: #fff; border-color: transparent; }
+  .btn-primary:hover { border-color: transparent; filter: brightness(1.06); }
+  .btn svg { width: 16px; height: 16px; }
+  .icon-btn { padding: 9px; }
+
+  /* poster / chart panel */
+  .poster {
+    position: relative; border-radius: var(--radius); overflow: hidden;
+    background: radial-gradient(120% 140% at 50% -20%, var(--poster-2), var(--poster));
+    box-shadow: var(--shadow); border: 1px solid rgba(255,255,255,.05);
+  }
+  .poster-head {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px;
+    padding: 20px 24px 4px; color: var(--poster-ink);
+  }
+  .poster-head h2 { margin: 0; font-size: 1.05rem; font-weight: 800; letter-spacing: .01em; }
+  .poster-head .sub { font-size: .8rem; color: var(--poster-mute); letter-spacing: .04em; text-transform: uppercase; }
+  .chart-stage { position: relative; width: 100%; }
+  canvas#chart { display: block; width: 100%; height: 440px; touch-action: none; }
+  .overlay { position: absolute; inset: 0; pointer-events: none; }
+
+  /* flags */
+  .flag { position: absolute; transform: translateX(-50%); text-align: center; pointer-events: none; }
+  .flag .note {
+    font-size: .62rem; font-weight: 800; letter-spacing: .06em; color: var(--poster-ink);
+    text-transform: uppercase; white-space: nowrap; line-height: 1.05; margin-bottom: 5px;
+    text-shadow: 0 1px 2px rgba(255,255,255,.85);
+  }
+  .flag .pin {
+    width: 30px; height: 34px; margin: 0 auto; position: relative; color: #fff;
+    border-radius: 7px 7px 7px 7px; display: grid; place-items: center;
+    font-weight: 800; font-size: .72rem; letter-spacing: .02em;
+    box-shadow: 0 3px 8px rgba(0,0,0,.45);
+    clip-path: polygon(0 0, 100% 0, 100% 66%, 50% 100%, 0 66%);
+  }
+  .flag .pin svg { width: 15px; height: 15px; }
+  .flag .name {
+    writing-mode: vertical-rl; text-orientation: mixed; transform: rotate(180deg);
+    font-size: .66rem; font-weight: 700; letter-spacing: .03em; color: var(--poster-ink);
+    margin: 3px auto 0; white-space: nowrap; text-shadow: 0 1px 2px rgba(255,255,255,.85);
+  }
+
+  /* tooltip */
+  .tip {
+    position: absolute; pointer-events: none; z-index: 5; transform: translate(-50%, -120%);
+    background: rgba(10,14,20,.94); color: #fff; border: 1px solid rgba(255,255,255,.14);
+    border-radius: 9px; padding: 8px 11px; font-size: .78rem; white-space: nowrap;
+    box-shadow: 0 6px 22px rgba(0,0,0,.5); opacity: 0; transition: opacity .1s;
+    font-variant-numeric: tabular-nums;
+  }
+  .tip b { color: #fff; font-variant-numeric: tabular-nums; }
+  .tip .r { display: flex; justify-content: space-between; gap: 16px; }
+  .tip .r span:first-child { color: rgba(255,255,255,.55); }
+  .tip .tw { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: .82rem;
+    margin-bottom: 5px; padding-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,.15); }
+  .tip .tw .dotc { width: 9px; height: 9px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px rgba(255,255,255,.25); }
+
+  /* stats */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 16px 0 0; }
+  .stat {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px;
+    box-shadow: var(--shadow);
+  }
+  .stat .k { font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-mute); font-weight: 700; }
+  .stat .v { font-size: 1.5rem; font-weight: 800; letter-spacing: -.01em; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .stat .v small { font-size: .78rem; font-weight: 650; color: var(--ink-soft); margin-left: 2px; }
+  .stat.gain .v { color: #2e7d32; }
+  .stat.loss .v { color: #b4622c; }
+
+  /* markers panel */
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: var(--shadow); margin-top: 18px; overflow: hidden;
+  }
+  .panel-head { display: flex; align-items: center; gap: 12px; padding: 15px 18px; border-bottom: 1px solid var(--line); }
+  .panel-head h3 { margin: 0; font-size: .98rem; font-weight: 800; }
+  .panel-head .hint { font-size: .78rem; color: var(--ink-mute); }
+  .panel-head .sp { margin-left: auto; }
+  .mk-list { display: flex; flex-direction: column; }
+  .mk-row {
+    display: grid; grid-template-columns: 22px 1.6fr 90px 96px 34px; gap: 10px; align-items: center;
+    padding: 9px 18px; border-bottom: 1px solid var(--line);
+  }
+  .mk-row:last-child { border-bottom: 0; }
+  .mk-row .sw { width: 16px; height: 16px; border-radius: 5px; }
+  .mk-row input[type=text], .mk-row select, .mk-row input[type=number] {
+    font: inherit; font-size: .86rem; padding: 6px 9px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%;
+  }
+  .mk-row .del { border: none; background: transparent; color: var(--ink-mute); padding: 6px; border-radius: 7px; }
+  .mk-row .del:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .mk-empty { padding: 16px 18px; color: var(--ink-mute); font-size: .85rem; }
+
+  /* dropzone */
+  .drop {
+    border: 2px dashed var(--line); border-radius: var(--radius); padding: 46px 24px; text-align: center;
+    color: var(--ink-soft); background: var(--panel); transition: border-color .15s, background .15s;
+  }
+  .drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+  .drop h2 { margin: 0 0 6px; color: var(--ink); font-size: 1.15rem; }
+  .drop p { margin: 0 0 18px; font-size: .9rem; }
+  .drop .fmt { font-size: .76rem; color: var(--ink-mute); margin-top: 14px; }
+  .hidden { display: none !important; }
+  footer { margin-top: 30px; font-size: .76rem; color: var(--ink-mute); text-align: center; }
+  @media (max-width: 620px) {
+    .mk-row { grid-template-columns: 20px 1fr 70px 34px; }
+    .mk-row .mk-dist { display: none; }
+    canvas#chart { height: 340px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="masthead">
+    <a class="brand" href="index.html" aria-label="Volver al inicio de Cumbre">
+      <div class="mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M3 19 L9 9 L13 14 L17 6 L21 19 Z"/>
+        </svg>
+      </div>
+      <div>
+        <h1>Cumbre</h1>
+        <p id="viewerSub">Perfil de elevación y distancia desde tu archivo GPX</p>
+      </div>
+    </a>
+    <div class="head-actions">
+      <button id="importBtn" class="btn-primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3m0 0L8 7m4-4 4 4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+        Importar GPX
+      </button>
+      <input id="fileInput" type="file" accept=".gpx,application/gpx+xml,text/xml" class="hidden">
+    </div>
+  </header>
+
+  <!-- empty state -->
+  <div id="drop" class="drop">
+    <h2>Arrastra un archivo <b>.gpx</b> aquí</h2>
+    <p>o pulsa <b>Importar GPX</b> para elegirlo — todo se procesa en tu navegador.</p>
+    <div class="fmt">Compatible con tracks (&lt;trkpt&gt;), rutas (&lt;rtept&gt;) y waypoints con elevación.</div>
+  </div>
+
+  <!-- result -->
+  <div id="result" class="hidden">
+    <div class="poster">
+      <div class="poster-head">
+        <h2 id="trackName">Perfil del recorrido</h2>
+        <span class="sub" id="trackSub"></span>
+      </div>
+      <div class="chart-stage">
+        <canvas id="chart"></canvas>
+        <div class="overlay" id="overlay"></div>
+        <div class="tip" id="tip"></div>
+      </div>
+    </div>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Puntos de interés</h3>
+        <span class="hint">Haz clic sobre el perfil para añadir uno</span>
+        <span class="sp"></span>
+        <button id="addMk" class="btn">+ Añadir punto</button>
+      </div>
+      <div id="mkList" class="mk-list"></div>
+    </div>
+  </div>
+
+  <footer>Distancias con fórmula de Haversine · Elevaciones tomadas del GPX · Sin subir nada a ningún servidor.</footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = s => document.querySelector(s);
+  const canvas = $("#chart"), ctx = canvas.getContext("2d");
+  const overlay = $("#overlay"), tip = $("#tip");
+
+  // ---- state ----
+  let profile = [];          // {d:meters, e:meters}
+  let markers = [];          // {d:meters, name, type}
+  let plot = null;           // pixel rect of plot area (css px)
+  let hoverIdx = -1;
+  let mkDots = [];           // {x,y,mk,color} posiciones de waypoints sobre la curva
+  let hoverDot = null;
+
+  const TYPES = {
+    start:  { color:"#63bb43", es:"Salida",          flag:true },
+    finish: { color:"#e23b3b", es:"Meta",            flag:true },
+    food:   { color:"#ef8a2b", es:"Avituallamiento", icon:"food"   },
+    water:  { color:"#37a9e0", es:"Agua",            icon:"water"  },
+    summit: { color:"#7d5fd0", es:"Cumbre",          icon:"summit" },
+    turn:   { color:"#8a94a1", es:"Indicación",      icon:"turn"   },
+    point:  { color:"#8cc63f", es:"Punto",           badge:"A"     },
+  };
+  // GPX <wpt><type> → tipo interno
+  const WPT_MAP = { FOOD:"food", DRINK:"water", WATER:"water", SUMMIT:"summit",
+    LEFT:"turn", RIGHT:"turn", STRAIGHT:"turn", GENERIC:"point" };
+
+  function iconSVG(name){
+    const st = 'fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+    switch(name){
+      case "food":   return `<svg viewBox="0 0 24 24" ${st}><path d="M6 3v7a2 2 0 0 0 4 0V3M8 10v11"/><path d="M17 3c-1.6 1-2.2 3-2.2 5.2S15.5 11 17 11v10"/></svg>`;
+      case "water":  return `<svg viewBox="0 0 24 24" fill="#fff" stroke="none"><path d="M12 3.5s5.5 6 5.5 10.3a5.5 5.5 0 0 1-11 0C6.5 9.5 12 3.5 12 3.5z"/></svg>`;
+      case "summit": return `<svg viewBox="0 0 24 24" ${st}><path d="M3 20 L10 6 L13.5 12 L16 8.5 L21 20 Z"/></svg>`;
+      case "turn":   return `<svg viewBox="0 0 24 24" ${st}><path d="M10 5 L5.5 9.5 L10 14"/><path d="M5.5 9.5H15a3.5 3.5 0 0 1 3.5 3.5V19"/></svg>`;
+      default: return "";
+    }
+  }
+
+  // ---------- GPX parsing ----------
+  function parseGPX(text) {
+    const doc = new DOMParser().parseFromString(text, "application/xml");
+    if (doc.querySelector("parsererror")) throw new Error("El archivo no es un XML válido.");
+    let pts = [...doc.getElementsByTagName("trkpt")], usedWptAsTrack = false;
+    if (!pts.length) pts = [...doc.getElementsByTagName("rtept")];
+    if (!pts.length) { pts = [...doc.getElementsByTagName("wpt")]; usedWptAsTrack = true; }
+    if (!pts.length) throw new Error("No se encontraron puntos con coordenadas en el GPX.");
+    const raw = pts.map(p => {
+      const lat = parseFloat(p.getAttribute("lat"));
+      const lon = parseFloat(p.getAttribute("lon"));
+      const eEl = p.getElementsByTagName("ele")[0];
+      const e = eEl ? parseFloat(eEl.textContent) : NaN;
+      return { lat, lon, e };
+    }).filter(p => isFinite(p.lat) && isFinite(p.lon));
+    // fill missing elevations by carrying last known
+    let last = null;
+    for (const p of raw) { if (isFinite(p.e)) last = p.e; else if (last !== null) p.e = last; }
+    if (!raw.some(p => isFinite(p.e))) throw new Error("El GPX no contiene datos de elevación.");
+    const first = raw.find(p => isFinite(p.e))?.e ?? 0;
+    for (const p of raw) if (!isFinite(p.e)) p.e = first;
+    const name = doc.querySelector("trk > name, rte > name, metadata > name, name")?.textContent?.trim();
+    const waypoints = usedWptAsTrack ? [] : [...doc.getElementsByTagName("wpt")].map(w=>({
+      lat: parseFloat(w.getAttribute("lat")),
+      lon: parseFloat(w.getAttribute("lon")),
+      name: (w.getElementsByTagName("name")[0]?.textContent||"").trim(),
+      type: (w.getElementsByTagName("type")[0]?.textContent||"").trim().toUpperCase(),
+    })).filter(w=>isFinite(w.lat)&&isFinite(w.lon));
+    return { raw, name, waypoints };
+  }
+
+  // km del nombre ("KM5.5 GOLF" → 5.5), o null
+  function parseKm(name){ const m=/km\s*([\d]+(?:[.,]\d+)?)/i.exec(name||""); return m?parseFloat(m[1].replace(",",".")):null; }
+  function cleanName(name){ return (name||"").replace(/^\s*km\s*[\d.,]+\s*/i,"").trim() || name || "Punto"; }
+  function nearestDist(raw, prof, w){
+    let bi=0, bd=Infinity;
+    for (let i=0;i<raw.length;i++){ const d=haversine(raw[i], w); if(d<bd){bd=d;bi=i;} }
+    return prof[bi].d;
+  }
+  function markersFromWpts(prof, raw, waypoints){
+    const end = prof[prof.length-1].d;
+    const mks = [{ id:mkSeq++, d:0, type:"start", name:"Salida" }];
+    for (const w of waypoints){
+      const km = parseKm(w.name);
+      const d = km!=null ? Math.max(0, Math.min(km*1000, end)) : nearestDist(raw, prof, w);
+      mks.push({ id:mkSeq++, d, type: WPT_MAP[w.type] || "point", name: cleanName(w.name) });
+    }
+    mks.push({ id:mkSeq++, d:end, type:"finish", name:"Meta" });
+    return mks;
+  }
+
+  function haversine(a, b) {
+    const R = 6371000, toR = Math.PI/180;
+    const dLat = (b.lat-a.lat)*toR, dLon = (b.lon-a.lon)*toR;
+    const la1 = a.lat*toR, la2 = b.lat*toR;
+    const h = Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)**2;
+    return 2*R*Math.asin(Math.sqrt(h));
+  }
+
+  function buildProfile(raw) {
+    const out = [{ d:0, e:raw[0].e }];
+    let d = 0;
+    for (let i=1;i<raw.length;i++){
+      d += haversine(raw[i-1], raw[i]);
+      out.push({ d, e: raw[i].e });
+    }
+    return out;
+  }
+
+  function stats(prof) {
+    let gain=0, loss=0, min=Infinity, max=-Infinity;
+    const TH = 1.5; // metros, filtra ruido del GPS
+    let ref = prof[0].e;
+    for (const p of prof){
+      min=Math.min(min,p.e); max=Math.max(max,p.e);
+      const diff = p.e - ref;
+      if (diff > TH){ gain += diff; ref = p.e; }
+      else if (diff < -TH){ loss += -diff; ref = p.e; }
+    }
+    return { dist: prof[prof.length-1].d, gain, loss, min, max };
+  }
+
+  // ---------- ticks ----------
+  function niceStep(range, target){
+    const raw = range/target;
+    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const norm = raw/mag;
+    let step = norm>=5?5:norm>=2?2:norm>=1?1:0.5;
+    return step*mag;
+  }
+  function ticks(min, max, target){
+    const step = niceStep(max-min, target);
+    const start = Math.ceil(min/step)*step;
+    const t=[];
+    for (let v=start; v<=max+1e-6; v+=step) t.push(Math.round(v*1000)/1000);
+    return { step, t };
+  }
+
+  // ---------- rendering ----------
+  function draw(){
+    if (!profile.length) return;
+    const cssW = canvas.clientWidth, cssH = canvas.clientHeight;
+    const dpr = Math.min(window.devicePixelRatio||1, 2.5);
+    canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,cssW,cssH);
+
+    const distKm = profile[profile.length-1].d/1000;
+    const elev = profile.map(p=>p.e);
+    let eMin = Math.min(...elev), eMax = Math.max(...elev);
+    const pad = Math.max((eMax-eMin)*0.12, 10);
+    const yTk = ticks(eMin-pad*0.4, eMax+pad, 5);
+    const yLo = Math.min(yTk.t[0], eMin-pad*0.4);
+    const yHi = Math.max(yTk.t[yTk.t.length-1], eMax+pad*0.4);
+    const xTk = ticks(0, distKm, Math.min(8, Math.max(4, Math.round(distKm/5))));
+
+    const m = { l: 58, r: 18, t: 96, b: 34 };
+    plot = { x:m.l, y:m.t, w:cssW-m.l-m.r, h:cssH-m.t-m.b, distKm, yLo, yHi };
+
+    const X = km => plot.x + (km/distKm)*plot.w;
+    const Xm = mm => X(mm/1000);
+    const Y = e => plot.y + plot.h - ((e-yLo)/(yHi-yLo))*plot.h;
+    plot.X=X; plot.Xm=Xm; plot.Y=Y;
+
+    const cs = getComputedStyle(document.documentElement);
+    const grid = cs.getPropertyValue("--grid").trim();
+    const gridS = cs.getPropertyValue("--grid-strong").trim();
+    const inkMute = cs.getPropertyValue("--poster-mute").trim();
+    const ink = cs.getPropertyValue("--poster-ink").trim();
+
+    // horizontal grid + Y labels
+    ctx.lineWidth = 1;
+    ctx.font = "700 12px "+cs.getPropertyValue("--font");
+    ctx.textBaseline = "middle";
+    for (const v of yTk.t){
+      const y = Y(v);
+      if (y < plot.y-2 || y > plot.y+plot.h+2) continue;
+      ctx.strokeStyle = grid;
+      ctx.beginPath(); ctx.moveTo(plot.x, y+.5); ctx.lineTo(plot.x+plot.w, y+.5); ctx.stroke();
+      ctx.fillStyle = inkMute; ctx.textAlign = "right";
+      ctx.fillText(Math.round(v).toString(), plot.x-10, y);
+    }
+    // vertical grid + X labels
+    ctx.textBaseline = "top"; ctx.textAlign = "center";
+    const xLabels = new Set(xTk.t.map(v=>Math.round(v)));
+    for (const km of xTk.t){
+      const x = X(km);
+      ctx.strokeStyle = grid;
+      ctx.beginPath(); ctx.moveTo(x+.5, plot.y); ctx.lineTo(x+.5, plot.y+plot.h); ctx.stroke();
+    }
+    // baseline + final vertical line
+    ctx.strokeStyle = gridS; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(plot.x+.5, plot.y); ctx.lineTo(plot.x+.5, plot.y+plot.h);
+    ctx.moveTo(plot.x, plot.y+plot.h+.5); ctx.lineTo(plot.x+plot.w, plot.y+plot.h+.5); ctx.stroke();
+
+    // area fill
+    const ridge = cs.getPropertyValue("--ridge").trim();
+    const grad = ctx.createLinearGradient(0, plot.y, 0, plot.y+plot.h);
+    grad.addColorStop(0,   cs.getPropertyValue("--area-top").trim());
+    grad.addColorStop(0.5, cs.getPropertyValue("--area-mid").trim());
+    grad.addColorStop(1,   cs.getPropertyValue("--area-bot").trim());
+    ctx.beginPath();
+    ctx.moveTo(Xm(profile[0].d), plot.y+plot.h);
+    for (const p of profile) ctx.lineTo(Xm(p.d), Y(p.e));
+    ctx.lineTo(Xm(profile[profile.length-1].d), plot.y+plot.h);
+    ctx.closePath();
+    ctx.fillStyle = grad; ctx.fill();
+    // stroke line on top (cresta)
+    ctx.beginPath();
+    profile.forEach((p,i)=> i?ctx.lineTo(Xm(p.d),Y(p.e)):ctx.moveTo(Xm(p.d),Y(p.e)));
+    ctx.strokeStyle = ridge;
+    ctx.lineWidth = 1.6; ctx.lineJoin="round"; ctx.stroke();
+
+    // X labels (draw after area so they sit on axis)
+    ctx.fillStyle = ink; ctx.font = "800 13px "+cs.getPropertyValue("--font");
+    ctx.textBaseline = "top"; ctx.textAlign = "center";
+    const drawnX = [];
+    for (const km of xTk.t){
+      const x = X(km);
+      if (drawnX.some(px=>Math.abs(px-x)<26)) continue;
+      drawnX.push(x);
+      ctx.fillText(Math.round(km)+"K", x, plot.y+plot.h+9);
+    }
+    // ensure final distance labelled
+    const xEnd = X(distKm);
+    if (!drawnX.some(px=>Math.abs(px-xEnd)<26)){
+      ctx.fillText(Math.round(distKm)+"K", xEnd, plot.y+plot.h+9);
+    }
+
+    // waypoint dots on the curve (mismo color del banderín)
+    mkDots = [];
+    const endD = profile[profile.length-1].d;
+    for (const mk of markers){
+      const t = TYPES[mk.type] || TYPES.point;
+      const dm = Math.max(0, Math.min(mk.d, endD));
+      const x = Xm(dm), y = Y(eleAt(dm));
+      mkDots.push({ x, y, mk, color:t.color });
+      const active = hoverDot && hoverDot.mk === mk;
+      ctx.beginPath(); ctx.arc(x, y, active?7:5.2, 0, 7);
+      ctx.fillStyle = t.color; ctx.fill();
+      ctx.lineWidth = active?3:2; ctx.strokeStyle = "#fff"; ctx.stroke();
+    }
+
+    // hover crosshair
+    if (hoverIdx>=0 && hoverIdx<profile.length){
+      const p = profile[hoverIdx];
+      const x=Xm(p.d), y=Y(p.e);
+      ctx.strokeStyle = "rgba(255,255,255,.45)"; ctx.lineWidth=1;
+      ctx.setLineDash([4,4]);
+      ctx.beginPath(); ctx.moveTo(x, plot.y); ctx.lineTo(x, plot.y+plot.h); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(x,y,4.5,0,7); ctx.fillStyle="#fff"; ctx.fill();
+      ctx.lineWidth=2.5; ctx.strokeStyle=ridge; ctx.stroke();
+    }
+
+    renderFlags();
+  }
+
+  function eleAt(meters){
+    // linear interp elevation at a given distance
+    if (meters<=profile[0].d) return profile[0].e;
+    const last=profile[profile.length-1];
+    if (meters>=last.d) return last.e;
+    let lo=0, hi=profile.length-1;
+    while (hi-lo>1){ const mid=(lo+hi)>>1; if(profile[mid].d<meters) lo=mid; else hi=mid; }
+    const a=profile[lo], b=profile[hi];
+    const t=(meters-a.d)/(b.d-a.d||1);
+    return a.e+(b.e-a.e)*t;
+  }
+
+  function renderFlags(){
+    if (!plot) return;
+    overlay.innerHTML = "";
+    const sorted = [...markers].sort((a,b)=>a.d-b.d);
+    for (const mk of sorted){
+      const t = TYPES[mk.type] || TYPES.point;
+      const x = plot.Xm(mk.d);
+      const el = document.createElement("div");
+      el.className = "flag";
+      el.style.left = x+"px";
+      el.style.top = "0px";
+      el.style.height = (plot.y+plot.h)+"px";
+      let inner = "";
+      if (mk.note) inner += `<div class="note">${escapeHTML(mk.note)}</div>`;
+      const pinContent = t.flag
+        ? `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M7 21V4"/><path d="M7 5h9l-2 3 2 3H7"/></svg>`
+        : (t.icon ? iconSVG(t.icon) : escapeHTML(mk.badge || t.badge || ""));
+      inner += `<div class="pin" style="background:${t.color}">${pinContent}</div>`;
+      inner += `<div class="name">${escapeHTML(mk.name)}</div>`;
+      el.innerHTML = inner;
+      overlay.appendChild(el);
+    }
+  }
+  const escapeHTML = s => String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+  // ---------- stats UI ----------
+  function renderStats(){
+    const s = stats(profile);
+    const km = (s.dist/1000);
+    const items = [
+      { k:"Distancia", v: km.toFixed(km<100?1:0), u:"km" },
+      { k:"Desnivel +", v: Math.round(s.gain).toLocaleString("es"), u:"m", cls:"gain" },
+      { k:"Desnivel −", v: Math.round(s.loss).toLocaleString("es"), u:"m", cls:"loss" },
+      { k:"Altitud máx.", v: Math.round(s.max).toLocaleString("es"), u:"m" },
+      { k:"Altitud mín.", v: Math.round(s.min).toLocaleString("es"), u:"m" },
+    ];
+    $("#stats").innerHTML = items.map(i=>`
+      <div class="stat ${i.cls||""}">
+        <div class="k">${i.k}</div>
+        <div class="v">${i.v}<small>${i.u}</small></div>
+      </div>`).join("");
+  }
+
+  // ---------- markers UI ----------
+  function renderMkList(){
+    const list = $("#mkList");
+    const sorted = [...markers].sort((a,b)=>a.d-b.d);
+    if (!sorted.length){ list.innerHTML = `<div class="mk-empty">Sin puntos. Haz clic en el perfil o pulsa “Añadir punto”.</div>`; return; }
+    const maxKm = profile[profile.length-1].d/1000;
+    list.innerHTML = sorted.map(mk=>{
+      const t = TYPES[mk.type]||TYPES.point;
+      const km = (mk.d/1000).toFixed(1);
+      const opts = Object.entries(TYPES).map(([k,v])=>
+        `<option value="${k}" ${k===mk.type?"selected":""}>${v.es}</option>`).join("");
+      return `<div class="mk-row" data-id="${mk.id}">
+        <span class="sw" style="background:${t.color}"></span>
+        <input type="text" class="mk-name" value="${escapeHTML(mk.name)}" placeholder="Nombre">
+        <select class="mk-type">${opts}</select>
+        <input type="number" class="mk-dist" value="${km}" min="0" max="${maxKm.toFixed(1)}" step="0.1" title="km">
+        <button class="del" title="Eliminar" aria-label="Eliminar">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>
+        </button>
+      </div>`;
+    }).join("");
+
+    list.querySelectorAll(".mk-row").forEach(row=>{
+      const id = +row.dataset.id;
+      const mk = markers.find(m=>m.id===id);
+      row.querySelector(".mk-name").addEventListener("input", e=>{ mk.name=e.target.value; renderFlags(); });
+      row.querySelector(".mk-type").addEventListener("change", e=>{ mk.type=e.target.value; renderFlags(); renderMkList(); });
+      row.querySelector(".mk-dist").addEventListener("change", e=>{
+        let km = parseFloat(e.target.value); if(!isFinite(km)) km=0;
+        km = Math.max(0, Math.min(km, maxKm));
+        mk.d = km*1000; renderFlags();
+      });
+      row.querySelector(".del").addEventListener("click", ()=>{ markers=markers.filter(m=>m.id!==id); renderFlags(); renderMkList(); });
+    });
+  }
+
+  let mkSeq = 1;
+  function addMarker(meters, type="point", name){
+    markers.push({ id:mkSeq++, d:meters, type, name: name || (type==="start"?"Salida":type==="finish"?"Meta":"Punto "+mkSeq) });
+    renderFlags(); renderMkList();
+  }
+
+  // ---------- load ----------
+  function load(prof, name, mks){
+    profile = prof;
+    markers = mks || [
+      { id:mkSeq++, d:0, type:"start", name:"Salida" },
+      { id:mkSeq++, d:prof[prof.length-1].d, type:"finish", name:"Meta" },
+    ];
+    $("#drop").classList.add("hidden");
+    $("#result").classList.remove("hidden");
+    $("#trackName").textContent = name || "Perfil del recorrido";
+    const s = stats(prof);
+    $("#trackSub").textContent = `${(s.dist/1000).toFixed(1)} km · +${Math.round(s.gain)} m`;
+    renderStats(); renderMkList();
+    requestAnimationFrame(draw);
+  }
+
+  function loadFromGPXText(text, fallbackName, titleOverride){
+    const { raw, name, waypoints } = parseGPX(text);
+    const prof = buildProfile(raw);
+    if (prof[prof.length-1].d < 1) throw new Error("El recorrido no tiene distancia (¿coordenadas iguales?).");
+    mkSeq = 1;
+    const mks = markersFromWpts(prof, raw, waypoints);
+    load(prof, titleOverride || name || fallbackName, mks);
+  }
+
+  async function handleFile(file){
+    try{
+      const text = await file.text();
+      loadFromGPXText(text, file.name.replace(/\.gpx$/i,""));
+    }catch(err){
+      alert("No se pudo leer el GPX:\n"+err.message);
+    }
+  }
+
+  // ---------- interaction ----------
+  function pointerToIdx(clientX){
+    const r = canvas.getBoundingClientRect();
+    const x = clientX - r.left;
+    if (!plot) return -1;
+    const km = ((x-plot.x)/plot.w)*plot.distKm;
+    const meters = km*1000;
+    // nearest sample
+    let lo=0, hi=profile.length-1;
+    if (meters<=profile[0].d) return 0;
+    if (meters>=profile[hi].d) return hi;
+    while (hi-lo>1){ const mid=(lo+hi)>>1; if(profile[mid].d<meters) lo=mid; else hi=mid; }
+    return (meters-profile[lo].d < profile[hi].d-meters)?lo:hi;
+  }
+
+  canvas.addEventListener("pointermove", e=>{
+    const idx = pointerToIdx(e.clientX);
+    if (idx<0){ hoverIdx=-1; hoverDot=null; tip.style.opacity=0; canvas.style.cursor="default"; draw(); return; }
+    // ¿el cursor está sobre un punto de waypoint?
+    const r = canvas.getBoundingClientRect();
+    const px = e.clientX-r.left, py = e.clientY-r.top;
+    let near=null, best=15;
+    for (const d of mkDots){ const dist=Math.hypot(d.x-px, d.y-py); if(dist<best){best=dist;near=d;} }
+    hoverIdx = idx; hoverDot = near; draw();
+    tip.style.opacity = 1;
+    canvas.style.cursor = near ? "pointer" : "crosshair";
+    if (near){
+      const t = TYPES[near.mk.type] || TYPES.point;
+      tip.style.left = near.x+"px";
+      tip.style.top = near.y+"px";
+      tip.innerHTML =
+        `<div class="tw" style="color:${t.color}"><span class="dotc" style="background:${t.color}"></span>${escapeHTML(near.mk.name)}</div>`+
+        `<div class="r"><span>Tipo</span><b>${t.es}</b></div>`+
+        `<div class="r"><span>Kilómetro</span><b>${(near.mk.d/1000).toFixed(2)} km</b></div>`+
+        `<div class="r"><span>Altitud</span><b>${Math.round(eleAt(near.mk.d))} m</b></div>`+
+        (near.mk.note?`<div class="r"><span>Nota</span><b>${escapeHTML(near.mk.note)}</b></div>`:"");
+    } else {
+      const p = profile[idx];
+      tip.style.left = plot.Xm(p.d)+"px";
+      tip.style.top = plot.Y(p.e)+"px";
+      tip.innerHTML = `<div class="r"><span>Distancia</span><b>${(p.d/1000).toFixed(2)} km</b></div>`+
+                      `<div class="r"><span>Altitud</span><b>${Math.round(p.e)} m</b></div>`;
+    }
+  });
+  canvas.addEventListener("pointerleave", ()=>{ hoverIdx=-1; hoverDot=null; tip.style.opacity=0; canvas.style.cursor="default"; draw(); });
+  canvas.addEventListener("click", e=>{
+    if (!plot) return;
+    const r = canvas.getBoundingClientRect();
+    const x = e.clientX-r.left, y = e.clientY-r.top;
+    if (x<plot.x-6 || x>plot.x+plot.w+6 || y<plot.y || y>plot.y+plot.h+6) return;
+    if (mkDots.some(d=>Math.hypot(d.x-x, d.y-y)<15)) return; // ya hay un punto aquí
+    const km = Math.max(0, Math.min(((x-plot.x)/plot.w)*plot.distKm, plot.distKm));
+    addMarker(km*1000, "point", "Punto "+(markers.length+1));
+  });
+
+  // ---------- wiring ----------
+  $("#importBtn").addEventListener("click", ()=>$("#fileInput").click());
+  $("#fileInput").addEventListener("change", e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); e.target.value=""; });
+  $("#addMk").addEventListener("click", ()=> addMarker(profile[profile.length-1].d*0.5, "point"));
+
+  const drop = $("#drop");
+  ["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev, e=>{e.preventDefault();drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev, e=>{e.preventDefault();drop.classList.remove("over");}));
+  drop.addEventListener("drop", e=>{ const f=e.dataTransfer.files[0]; if(f) handleFile(f); });
+  // allow dropping anywhere on window once a track is loaded
+  window.addEventListener("dragover", e=>e.preventDefault());
+  window.addEventListener("drop", e=>{ e.preventDefault(); const f=e.dataTransfer?.files?.[0]; if(f && f.name.match(/\.gpx$/i)) handleFile(f); });
+
+  // tema claro fijo
+  document.documentElement.setAttribute("data-theme", "light");
+
+  let rz; window.addEventListener("resize", ()=>{ clearTimeout(rz); rz=setTimeout(draw, 80); });
+
+  // ---------- autoload desde Cumbre (carrera del catálogo o GPX subido en el inicio) ----------
+  (async function autoload(){
+    const params = new URLSearchParams(location.search);
+    const ruta = params.get("ruta");
+    const fuente = params.get("fuente");
+    if (!ruta && fuente !== "upload") return;
+
+    $("#drop").innerHTML = `<h2>Cargando recorrido…</h2><p>Preparando tu perfil de altimetría.</p>`;
+
+    try{
+      if (fuente === "upload"){
+        const text = sessionStorage.getItem("cumbre_gpx_text");
+        const name = sessionStorage.getItem("cumbre_gpx_name") || "Recorrido";
+        sessionStorage.removeItem("cumbre_gpx_text");
+        sessionStorage.removeItem("cumbre_gpx_name");
+        if (!text) throw new Error("No se encontró el archivo cargado. Vuelve a intentarlo desde el inicio.");
+        loadFromGPXText(text, name);
+      } else {
+        const res = await fetch(ruta);
+        if (!res.ok) throw new Error("No se pudo cargar el recorrido (código "+res.status+").");
+        const text = await res.text();
+        const carrera = params.get("carrera");
+        const distancia = params.get("distancia");
+        const titulo = (carrera && distancia) ? `${carrera} · ${distancia}` : (carrera || distancia || null);
+        if (titulo) $("#viewerSub").textContent = titulo;
+        loadFromGPXText(text, null, titulo);
+      }
+    }catch(err){
+      $("#drop").innerHTML = `<h2>No se pudo cargar el recorrido</h2><p>${escapeHTML(err.message)}</p>`+
+        `<div class="fmt">Vuelve a <a href="index.html">Cumbre</a> e inténtalo de nuevo, o importa tu GPX manualmente.</div>`;
+    }
+  })();
+})();
+</script>
+</body>
+</html>
