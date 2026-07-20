@@ -70,19 +70,26 @@ vercel --prod          # despliegue a producción
 
 ## Analítica
 
-Cumbre usa **Vercel Web Analytics** (sin cookies, *same-origin*, compatible con el CSP estricto).
+Cumbre usa **PostHog** (tier gratis: 1M eventos/mes, con embudos y retención — ideal para MVP).
 Toda la instrumentación pasa por una única función `window.cumbreTrack(name, data)` en
-`assets/js/analytics.js`, así que **cambiar de proveedor** (Plausible, Umami…) solo implica editar
-ese archivo; los puntos de llamada en `index.js` / `visor.js` no cambian.
+`assets/js/analytics.js`, así que **cambiar de proveedor** solo implica editar ese archivo; los
+puntos de llamada en `index.js` / `visor.js` no cambian. Se configura sin cookies, sin autocapture
+y sin grabación de sesión.
 
 > **Privacidad:** solo se envían **categorías/acciones** (qué distancia, rango de tamaño, tipo de
 > punto, éxito/fallo). **Nunca** se envía contenido del GPX: coordenadas, nombres de archivo
 > personales, ni nombres/notas de waypoints. Coherente con "todo se procesa en tu navegador".
 
-**Activarlo:** en el dashboard de Vercel → proyecto → pestaña **Analytics** → **Enable**. Sin esto,
-`/_vercel/insights/script.js` no se sirve y los eventos no se registran (la app sigue funcionando).
-El plan **Hobby** es gratis pero **no comercial** y con tope de eventos/mes; un producto en
-crecimiento requiere **Pro**.
+**Activarlo:**
+
+1. Crea un proyecto en [PostHog](https://posthog.com) y copia tu **Project API Key** (empieza con `phc_`).
+2. Pégala en `assets/js/analytics.js` → `POSTHOG_KEY`. (Si tus usuarios están en la UE, cambia
+   `POSTHOG_HOST` a `https://eu.i.posthog.com` y los dominios de PostHog en el CSP de `vercel.json`.)
+3. Sin una key válida, la app funciona igual pero no se registra nada.
+
+> **CSP:** PostHog es un script externo, así que `vercel.json` permite sus dominios en `script-src`
+> y `connect-src` (`us-assets.i.posthog.com`, `us.i.posthog.com`). Si migras a otro proveedor,
+> ajusta esos dominios.
 
 ### Eventos
 

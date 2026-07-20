@@ -63,12 +63,15 @@ The `autoload()` IIFE at the bottom of `visor.js` reads `location.search` and dr
 - **Day / start time / cutoff shown on race rows are NOT in the GPX files** — they come from
   external race info. Don't fabricate them; the 50k/80k rows omit that line until provided.
 - **Analytics = privacy-safe, swappable.** All tracking goes through `window.cumbreTrack(name, data)`
-  in `assets/js/analytics.js` (currently Vercel Web Analytics via the same-origin
-  `/_vercel/insights/script.js` — CSP-compatible, no cookies). **Only send categories/buckets, never
-  GPX content** (no coordinates, personal filenames, or waypoint names/notes). Events wired:
-  `race_selected`, `gpx_uploaded`, `profile_rendered`, `profile_load_failed`, `marker_added`,
-  `export_gpx`, `export_pdf`. Pageviews are automatic. To swap providers, change only
-  `analytics.js`; call sites stay. Vercel free tier (Hobby) is non-commercial + event-capped.
+  in `assets/js/analytics.js` (currently **PostHog** — free tier has custom events + funnels; note
+  Vercel Web Analytics does NOT support custom events on its free Hobby plan, which is why we moved).
+  PostHog loads via `<script src=".../array.js">`; the `POSTHOG_KEY` placeholder must be filled with a
+  real Project API key or nothing is sent. Configured with no cookies / no autocapture / no session
+  recording. **Only send categories/buckets, never GPX content** (no coordinates, personal filenames,
+  or waypoint names/notes). Events wired: `race_selected`, `gpx_uploaded`, `profile_rendered`,
+  `profile_load_failed`, `marker_added`, `export_gpx`, `export_pdf`. Pageviews are automatic. PostHog
+  is an external script, so its domains are in the `vercel.json` CSP (`script-src`/`connect-src`). To
+  swap providers, change only `analytics.js`, the `<script>` tag, and the CSP domains.
 
 ## Run locally
 

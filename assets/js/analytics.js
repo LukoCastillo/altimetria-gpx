@@ -1,29 +1,43 @@
 /*
- * Cumbre · capa de analítica (intercambiable)
+ * Cumbre · capa de analítica (intercambiable) — PostHog
  * ------------------------------------------------------------
  * Envía SOLO acciones y categorías (qué distancia, si hubo éxito, tipo de
  * punto…). NUNCA envía contenido del GPX: coordenadas, nombres de archivo
- * personales, ni nombres/notas de waypoints. Esto respeta la promesa de que
+ * personales, ni nombres/notas de waypoints. Respeta la promesa de que
  * "todo se procesa en tu navegador".
  *
- * Hoy usa Vercel Web Analytics (same-origin, compatible con el CSP estricto).
- * Si algún día migras a Plausible/Umami, solo cambia el cuerpo de
- * `window.cumbreTrack`; los puntos de llamada en index.js / visor.js no cambian.
+ * El resto de la app solo usa `window.cumbreTrack(name, data)`. Para cambiar de
+ * proveedor (Vercel, Umami, Plausible…), edita SOLO este archivo; los puntos de
+ * llamada en index.js / visor.js no cambian.
+ *
+ * PostHog se carga con <script src="…/array.js"> en el HTML (define window.posthog).
  */
 (() => {
   "use strict";
 
-  // Cola de Vercel Web Analytics: captura eventos disparados antes de que
-  // el script de insights termine de cargar. (Definir aquí, no inline en el
-  // HTML, para no violar `script-src 'self'`.)
-  window.va = window.va || function () {
-    (window.vaq = window.vaq || []).push(arguments);
-  };
+  // ⚠️ Pega aquí tu "Project API Key" de PostHog (es pública, segura en el cliente).
+  //    PostHog → Settings → Project → Project API Key (empieza con "phc_").
+  const POSTHOG_KEY  = "phc_zUzbBZJ43BVm9ERGpqxXkh7WSdmi6v49zEZjS27Mv5FN";
+  const POSTHOG_HOST = "https://us.i.posthog.com";   // UE: https://eu.i.posthog.com
+
+  const keyListo = POSTHOG_KEY && POSTHOG_KEY.indexOf("phc_zUzbBZJ43BVm9ERGpqxXkh7WSdmi6v49zEZjS27Mv5FN") !== 0;
+
+  if (keyListo && window.posthog && typeof window.posthog.init === "function") {
+    window.posthog.init(POSTHOG_KEY, {
+      api_host: POSTHOG_HOST,
+      autocapture: false,               // solo los eventos que definimos nosotros
+      capture_pageview: true,           // pageviews automáticos (adquisición)
+      disable_session_recording: true,  // sin grabación de sesión
+      persistence: "localStorage",      // sin cookies (no requiere banner)
+    });
+  }
 
   // API única que usa el resto de la app.
   window.cumbreTrack = function (name, data) {
     try {
-      window.va("event", { name: name, data: data || {} });
+      if (window.posthog && typeof window.posthog.capture === "function") {
+        window.posthog.capture(name, data || {});
+      }
     } catch (_) {
       /* la analítica nunca debe romper la app */
     }
