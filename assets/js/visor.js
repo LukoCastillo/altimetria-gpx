@@ -762,13 +762,29 @@
     "data/ultra-coah-campeonato-continental-de-las-americas-2026-100-millas-ultra-coah-2026-2-0.gpx",
   ]);
 
+  // deja que el navegador pinte antes de un bloque de trabajo síncrono pesado
+  const yieldToPaint = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
   (async function autoload(){
     const params = new URLSearchParams(location.search);
     const ruta = params.get("ruta");
     const fuente = params.get("fuente");
     if (!ruta && fuente !== "upload") return;
 
-    $("#drop").innerHTML = `<h2>Cargando recorrido…</h2><p>Preparando tu perfil de altimetría.</p>`;
+    const carrera = params.get("carrera");
+    const distancia = params.get("distancia");
+    const titulo = (carrera && distancia) ? `${carrera} · ${distancia}` : (carrera || distancia || null);
+    const cargandoTxt = titulo ? `Cargando ${titulo}…` : "Cargando recorrido…";
+
+    const drop = $("#drop");
+    drop.classList.add("loading");
+    drop.setAttribute("aria-busy", "true");
+    drop.innerHTML =
+      `<div class="loader" role="status" aria-live="polite">` +
+        `<div class="spinner" aria-hidden="true"></div>` +
+        `<h2>${escapeHTML(cargandoTxt)}</h2>` +
+        `<p>Preparando tu perfil de altimetría…</p>` +
+      `</div>`;
 
     try{
       if (fuente === "upload"){
@@ -777,20 +793,21 @@
         sessionStorage.removeItem("cumbre_gpx_text");
         sessionStorage.removeItem("cumbre_gpx_name");
         if (!text) throw new Error("No se encontró el archivo cargado. Vuelve a intentarlo desde el inicio.");
+        await yieldToPaint();               // que el spinner se vea antes de parsear/dibujar
         loadFromGPXText(text, name, null, name);
       } else {
         if (!CATALOGO.has(ruta)) throw new Error("Ruta de carrera no reconocida.");
         const res = await fetch(ruta);
         if (!res.ok) throw new Error("No se pudo cargar el recorrido (código "+res.status+").");
         const text = await res.text();
-        const carrera = params.get("carrera");
-        const distancia = params.get("distancia");
-        const titulo = (carrera && distancia) ? `${carrera} · ${distancia}` : (carrera || distancia || null);
         if (titulo) $("#viewerSub").textContent = titulo;
+        await yieldToPaint();               // que el spinner se vea durante el parseo del GPX (p. ej. 80K)
         loadFromGPXText(text, null, titulo, ruta.split("/").pop());
       }
     }catch(err){
-      $("#drop").innerHTML = `<h2>No se pudo cargar el recorrido</h2><p>${escapeHTML(err.message)}</p>`+
+      drop.classList.remove("loading");
+      drop.removeAttribute("aria-busy");
+      drop.innerHTML = `<h2>No se pudo cargar el recorrido</h2><p>${escapeHTML(err.message)}</p>`+
         `<div class="fmt">Vuelve a <a href="index.html">Cumbre</a> e inténtalo de nuevo, o importa tu GPX manualmente.</div>`;
     }
   })();
