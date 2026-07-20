@@ -6,6 +6,7 @@
   document.querySelectorAll(".dist-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       const { ruta, carrera, distancia } = btn.dataset;
+      window.cumbreTrack?.("race_selected", { carrera, distancia });
       const url = `visor.html?ruta=${encodeURIComponent(ruta)}&carrera=${encodeURIComponent(carrera)}&distancia=${encodeURIComponent(distancia)}`;
       location.href = url;
     });
@@ -17,6 +18,8 @@
   function goWithFile(file){
     if (!file) return;
     if (!/\.gpx$/i.test(file.name)){ alert("Elige un archivo .gpx"); return; }
+    // solo categoría de tamaño, nunca el nombre ni el contenido del archivo
+    window.cumbreTrack?.("gpx_uploaded", { size_bucket: file.size < 1e6 ? "<1MB" : file.size < 5e6 ? "1-5MB" : ">5MB" });
     const reader = new FileReader();
     reader.onload = () => {
       try{

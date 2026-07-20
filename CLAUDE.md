@@ -62,6 +62,13 @@ The `autoload()` IIFE at the bottom of `visor.js` reads `location.search` and dr
   blocks arbitrary/remote URLs); a race missing from it fails with "Ruta de carrera no reconocida".
 - **Day / start time / cutoff shown on race rows are NOT in the GPX files** — they come from
   external race info. Don't fabricate them; the 50k/80k rows omit that line until provided.
+- **Analytics = privacy-safe, swappable.** All tracking goes through `window.cumbreTrack(name, data)`
+  in `assets/js/analytics.js` (currently Vercel Web Analytics via the same-origin
+  `/_vercel/insights/script.js` — CSP-compatible, no cookies). **Only send categories/buckets, never
+  GPX content** (no coordinates, personal filenames, or waypoint names/notes). Events wired:
+  `race_selected`, `gpx_uploaded`, `profile_rendered`, `profile_load_failed`, `marker_added`,
+  `export_gpx`, `export_pdf`. Pageviews are automatic. To swap providers, change only
+  `analytics.js`; call sites stay. Vercel free tier (Hobby) is non-commercial + event-capped.
 
 ## Run locally
 

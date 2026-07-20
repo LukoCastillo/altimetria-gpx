@@ -19,25 +19,33 @@
   let sourceUsesWptAsTrack = false;
 
   const TYPES = {
+    food:   { color:"#ef8a2b", es:"Avituallamiento", icon:"aid"    },
+    water:  { color:"#37a9e0", es:"Agua",            icon:"water"  },
+    meal:   { color:"#dc7623", es:"Comida",          icon:"meal"   },
+    gel:    { color:"#d99b20", es:"Gel",             icon:"gel"    },
+    drink:  { color:"#258bbd", es:"Bebida",          icon:"drink"  },
+    summit: { color:"#7d5fd0", es:"Cumbre",          icon:"summit" },
+    point:  { color:"#8cc63f", es:"Otro",            badge:"A"     },
     start:  { color:"#63bb43", es:"Salida",          flag:true },
     finish: { color:"#e23b3b", es:"Meta",            flag:true },
-    food:   { color:"#ef8a2b", es:"Avituallamiento", icon:"food"   },
-    water:  { color:"#37a9e0", es:"Agua",            icon:"water"  },
-    summit: { color:"#7d5fd0", es:"Cumbre",          icon:"summit" },
-    turn:   { color:"#8a94a1", es:"Indicación",      icon:"turn"   },
-    point:  { color:"#8cc63f", es:"Punto",           badge:"A"     },
   };
+  const TYPE_ORDER = ["food", "water", "meal", "gel", "drink", "summit", "point", "start", "finish"];
   // GPX <wpt><type> → tipo interno
-  const WPT_MAP = { FOOD:"food", DRINK:"water", WATER:"water", SUMMIT:"summit",
-    LEFT:"turn", RIGHT:"turn", STRAIGHT:"turn", GENERIC:"point" };
+  const WPT_MAP = {
+    AID_STATION:"food", FOOD:"meal", WATER:"water", ENERGY_GEL:"gel", SPORTS_DRINK:"drink",
+    FIRST_AID:"point", DRINK:"drink", SUMMIT:"summit",
+    LEFT:"point", RIGHT:"point", STRAIGHT:"point", GENERIC:"point"
+  };
 
   function iconSVG(name){
     const st = 'fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
     switch(name){
-      case "food":   return `<svg viewBox="0 0 24 24" ${st}><path d="M6 3v7a2 2 0 0 0 4 0V3M8 10v11"/><path d="M17 3c-1.6 1-2.2 3-2.2 5.2S15.5 11 17 11v10"/></svg>`;
-      case "water":  return `<svg viewBox="0 0 24 24" fill="#fff" stroke="none"><path d="M12 3.5s5.5 6 5.5 10.3a5.5 5.5 0 0 1-11 0C6.5 9.5 12 3.5 12 3.5z"/></svg>`;
+      case "aid":    return `<svg viewBox="0 0 24 24" ${st}><path d="M4 8h16L18 4H6L4 8Z"/><path d="M6 8v12M18 8v12M9 13h6v4H9z"/></svg>`;
+      case "water":  return `<svg viewBox="0 0 24 24" ${st}><path d="M12 3.5s5.5 6 5.5 10.3a5.5 5.5 0 0 1-11 0C6.5 9.5 12 3.5 12 3.5z"/></svg>`;
+      case "meal":   return `<svg viewBox="0 0 24 24" ${st}><path d="M6 3v7a2 2 0 0 0 4 0V3M8 10v11"/><path d="M17 3c-1.6 1-2.2 3-2.2 5.2S15.5 11 17 11v10"/></svg>`;
+      case "gel":    return `<svg viewBox="0 0 24 24" ${st}><path d="M7 4h10l1 16H6L7 4Z"/><path d="m13 7-3 5h3l-2 5"/></svg>`;
+      case "drink":  return `<svg viewBox="0 0 24 24" ${st}><path d="M8 7h8l-1 13H9L8 7Z"/><path d="M7 4h7M14 4l3 5"/></svg>`;
       case "summit": return `<svg viewBox="0 0 24 24" ${st}><path d="M3 20 L10 6 L13.5 12 L16 8.5 L21 20 Z"/></svg>`;
-      case "turn":   return `<svg viewBox="0 0 24 24" ${st}><path d="M10 5 L5.5 9.5 L10 14"/><path d="M5.5 9.5H15a3.5 3.5 0 0 1 3.5 3.5V19"/></svg>`;
       default: return "";
     }
   }
@@ -302,7 +310,7 @@
       if (mk.note) inner += `<div class="note">${escapeHTML(mk.note)}</div>`;
       const pinContent = t.flag
         ? `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M7 21V4"/><path d="M7 5h9l-2 3 2 3H7"/></svg>`
-        : String(markerIndex+1);
+        : t.icon ? iconSVG(t.icon) : String(markerIndex+1);
       inner += `<div class="pin" style="background:${t.color}">${pinContent}</div>`;
       if (t.flag) inner += `<div class="name">${escapeHTML(mk.name)}</div>`;
       el.innerHTML = inner;
@@ -338,8 +346,8 @@
     list.innerHTML = sorted.map((mk,index)=>{
       const t = TYPES[mk.type]||TYPES.point;
       const km = (mk.d/1000).toFixed(1);
-      const opts = Object.entries(TYPES).map(([k,v])=>
-        `<option value="${k}" ${k===mk.type?"selected":""}>${v.es}</option>`).join("");
+      const opts = TYPE_ORDER.map(k=>
+        `<option value="${k}" ${k===mk.type?"selected":""}>${TYPES[k].es}</option>`).join("");
       return `<div class="mk-row" data-id="${mk.id}">
         <span class="sw" style="background:${t.color}" title="Punto ${index+1}">${index+1}</span>
         <label class="mk-field mk-name-field"><span>Acción</span><input type="text" class="mk-name" value="${escapeHTML(mk.name)}" placeholder="Nombre"></label>
@@ -366,9 +374,10 @@
   }
 
   let mkSeq = 1;
-  function addMarker(meters, type="point", name){
+  function addMarker(meters, type="point", name, metodo="otro"){
     markers.push({ id:mkSeq++, d:meters, type, name: name || (type==="start"?"Salida":type==="finish"?"Meta":"Punto "+mkSeq) });
     draw(); renderMkList();
+    window.cumbreTrack?.("marker_added", { tipo: type, metodo });
   }
 
   // ---------- exports ----------
@@ -410,7 +419,7 @@
     // Si el archivo usa <wpt> como única geometría, se conservan para no borrar la ruta.
     if (!sourceUsesWptAsTrack) [...root.children].filter(el=>el.localName==="wpt").forEach(el=>el.remove());
     const firstRoute = [...root.children].find(el=>el.localName==="rte" || el.localName==="trk") || null;
-    const typeMap = { food:"FOOD", water:"WATER", summit:"SUMMIT", turn:"STRAIGHT",
+    const typeMap = { food:"AID_STATION", meal:"FOOD", gel:"ENERGY_GEL", water:"WATER", drink:"SPORTS_DRINK", summit:"SUMMIT",
       start:"GENERIC", finish:"GENERIC", point:"GENERIC" };
     const sorted = [...markers].sort((a,b)=>a.d-b.d);
     for (const mk of sorted){
@@ -435,6 +444,7 @@
     try{
       const xml = buildGPXWithMarkers();
       downloadBlob(new Blob([xml], {type:"application/gpx+xml;charset=utf-8"}), safeBaseName(sourceFileName)+"-con-puntos.gpx");
+      window.cumbreTrack?.("export_gpx", { puntos: markers.length });
     }catch(err){ alert("No se pudo crear el GPX:\n"+err.message); }
   }
 
@@ -584,6 +594,7 @@
       const jpeg=atob(data);
       const pdf=buildPDF(jpeg,chart.width,chart.height);
       downloadBlob(pdf,safeBaseName(sourceFileName)+"-altimetria.pdf");
+      window.cumbreTrack?.("export_pdf", { puntos: markers.length });
     }catch(err){ alert("No se pudo crear el PDF:\n"+err.message); }
     finally{ btn.disabled=false; btn.innerHTML=original; }
   }
@@ -622,7 +633,9 @@
     try{
       const text = await file.text();
       loadFromGPXText(text, file.name.replace(/\.gpx$/i,""), null, file.name);
+      window.cumbreTrack?.("profile_rendered", { fuente: "import_viewer", distancia: "custom" });
     }catch(err){
+      window.cumbreTrack?.("profile_load_failed", { fuente: "import_viewer", razon: String(err && err.message || "error").slice(0, 80) });
       alert("No se pudo leer el GPX:\n"+err.message);
     }
   }
@@ -717,7 +730,7 @@
     }
     if (mkDots.some(d=>Math.hypot(d.x-x, d.y-y)<15)) return; // ya hay un punto aquí
     const km = Math.max(0, Math.min(((x-plot.x)/plot.w)*plot.distKm, plot.distKm));
-    addMarker(km*1000, "point", "Punto "+(markers.length+1));
+    addMarker(km*1000, "point", "Punto "+(markers.length+1), "click_perfil");
   });
 
   tip.addEventListener("click", e=>{
@@ -727,7 +740,7 @@
     const meters = parseFloat(btn.dataset.meters);
     if (!isFinite(meters)) return;
     touchLocked=false; tip.classList.remove("locked"); tip.style.opacity=0;
-    addMarker(meters, "point", "Punto "+(markers.length+1));
+    addMarker(meters, "point", "Punto "+(markers.length+1), "tooltip");
   });
   document.addEventListener("pointerdown", e=>{
     if (touchLocked && e.pointerType==="touch" && !e.target.closest(".chart-stage")) clearTouchInspect();
@@ -736,7 +749,7 @@
   // ---------- wiring ----------
   $("#importBtn").addEventListener("click", ()=>$("#fileInput").click());
   $("#fileInput").addEventListener("change", e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); e.target.value=""; });
-  $("#addMk").addEventListener("click", ()=> addMarker(profile[profile.length-1].d*0.5, "point"));
+  $("#addMk").addEventListener("click", ()=> addMarker(profile[profile.length-1].d*0.5, "point", undefined, "boton"));
   $("#downloadGpx").addEventListener("click", exportGPX);
   $("#downloadPdf").addEventListener("click", exportPDF);
 
@@ -795,6 +808,7 @@
         if (!text) throw new Error("No se encontró el archivo cargado. Vuelve a intentarlo desde el inicio.");
         await yieldToPaint();               // que el spinner se vea antes de parsear/dibujar
         loadFromGPXText(text, name, null, name);
+        window.cumbreTrack?.("profile_rendered", { fuente: "upload_home", distancia: "custom" });
       } else {
         if (!CATALOGO.has(ruta)) throw new Error("Ruta de carrera no reconocida.");
         const res = await fetch(ruta);
@@ -803,8 +817,14 @@
         if (titulo) $("#viewerSub").textContent = titulo;
         await yieldToPaint();               // que el spinner se vea durante el parseo del GPX (p. ej. 80K)
         loadFromGPXText(text, null, titulo, ruta.split("/").pop());
+        window.cumbreTrack?.("profile_rendered", { fuente: "catalog", distancia: distancia || "?" });
       }
     }catch(err){
+      window.cumbreTrack?.("profile_load_failed", {
+        fuente: fuente === "upload" ? "upload_home" : "catalog",
+        distancia: distancia || "?",
+        razon: String(err && err.message || "error").slice(0, 80),
+      });
       drop.classList.remove("loading");
       drop.removeAttribute("aria-busy");
       drop.innerHTML = `<h2>No se pudo cargar el recorrido</h2><p>${escapeHTML(err.message)}</p>`+

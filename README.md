@@ -20,7 +20,7 @@ altimetria-gpx/
 ├── visor.html           # Visor: perfil de altimetría desde un GPX
 ├── assets/
 │   ├── css/              # index.css, visor.css
-│   └── js/                # index.js, visor.js
+│   └── js/                # index.js, visor.js, analytics.js
 ├── data/                 # Tracks GPX oficiales de Ultra Coahuila 2026 (30K, 50K, 80K, 100 Millas)
 ├── vercel.json          # Configuración de despliegue (sitio estático, cabeceras de seguridad)
 ├── .gitignore
@@ -67,3 +67,34 @@ vercel --prod          # despliegue a producción
 2. En [vercel.com](https://vercel.com) → **Add New… → Project** → importa el repo.
 3. Framework Preset: **Other**. Build Command: *(vacío)*. Output Directory: *(raíz)*.
 4. **Deploy**. Cada push a `main` volverá a desplegar automáticamente.
+
+## Analítica
+
+Cumbre usa **Vercel Web Analytics** (sin cookies, *same-origin*, compatible con el CSP estricto).
+Toda la instrumentación pasa por una única función `window.cumbreTrack(name, data)` en
+`assets/js/analytics.js`, así que **cambiar de proveedor** (Plausible, Umami…) solo implica editar
+ese archivo; los puntos de llamada en `index.js` / `visor.js` no cambian.
+
+> **Privacidad:** solo se envían **categorías/acciones** (qué distancia, rango de tamaño, tipo de
+> punto, éxito/fallo). **Nunca** se envía contenido del GPX: coordenadas, nombres de archivo
+> personales, ni nombres/notas de waypoints. Coherente con "todo se procesa en tu navegador".
+
+**Activarlo:** en el dashboard de Vercel → proyecto → pestaña **Analytics** → **Enable**. Sin esto,
+`/_vercel/insights/script.js` no se sirve y los eventos no se registran (la app sigue funcionando).
+El plan **Hobby** es gratis pero **no comercial** y con tope de eventos/mes; un producto en
+crecimiento requiere **Pro**.
+
+### Eventos
+
+Los *pageviews* son automáticos. Eventos personalizados (embudo adquisición → activación → valor):
+
+| Evento | Cuándo | Datos |
+|---|---|---|
+| `race_selected` | clic en una distancia del catálogo | `carrera`, `distancia` |
+| `gpx_uploaded` | el usuario sube su propio GPX | `size_bucket` |
+| `profile_rendered` | el perfil se dibujó (**activación**) | `fuente`, `distancia` |
+| `profile_load_failed` | falló la carga del GPX | `fuente`, `distancia`, `razon` |
+| `marker_added` | añade un punto de interés | `tipo`, `metodo` |
+| `export_gpx` / `export_pdf` | descarga el recorrido/altimetría (**valor**) | `puntos` |
+
+Embudo a vigilar: `pageview → race_selected/gpx_uploaded → profile_rendered → (marker_added | export_*)`.
