@@ -13,13 +13,14 @@
   let hoverDot = null;
   let touchLocked = false;
   let lastPointerType = "mouse";
+  let activeEditorMarkerId = null;
   let sourceGPX = "";        // XML original para poder exportar el track completo
   let sourceRaw = [];         // {lat,lon,e}, alineado con profile
   let sourceFileName = "recorrido.gpx";
   let sourceUsesWptAsTrack = false;
 
   const TYPES = {
-    food:   { color:"#ef8a2b", es:"Avituallamiento", icon:"aid"    },
+    food:   { color:"#ef8a2b", es:"Abasto",           icon:"aid"    },
     water:  { color:"#37a9e0", es:"Agua",            icon:"water"  },
     meal:   { color:"#dc7623", es:"Comida",          icon:"meal"   },
     gel:    { color:"#d99b20", es:"Gel",             icon:"gel"    },
@@ -49,6 +50,7 @@
       default: return "";
     }
   }
+  const FLAG_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M7 21V4"/><path d="M7 5h9l-2 3 2 3H7"/></svg>`;
 
   // ---------- GPX parsing ----------
   const MAX_GPX_BYTES = 20 * 1024 * 1024;   // 20 MB — evita colgar el navegador
@@ -254,7 +256,7 @@
       const dm = Math.max(0, Math.min(mk.d, endD));
       const x = Xm(dm), y = Y(eleAt(dm));
       mkDots.push({ x, y, mk, color:t.color });
-      const active = hoverDot && hoverDot.mk === mk;
+      const active = (hoverDot && hoverDot.mk === mk) || activeEditorMarkerId === mk.id;
       const isEdge = t.flag;
       ctx.beginPath(); ctx.arc(x, y, isEdge?(active?7:5.5):(active?11:9), 0, 7);
       ctx.fillStyle = t.color; ctx.fill();
@@ -302,14 +304,14 @@
       const t = TYPES[mk.type] || TYPES.point;
       const x = plot.Xm(mk.d);
       const el = document.createElement("div");
-      el.className = "flag "+(t.flag?"edge":"poi");
+      el.className = "flag "+(t.flag?"edge":"poi")+(activeEditorMarkerId===mk.id?" editing":"");
       el.style.left = x+"px";
       el.style.top = "0px";
       el.style.height = (plot.y+plot.h)+"px";
       let inner = "";
       if (mk.note) inner += `<div class="note">${escapeHTML(mk.note)}</div>`;
       const pinContent = t.flag
-        ? `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M7 21V4"/><path d="M7 5h9l-2 3 2 3H7"/></svg>`
+        ? FLAG_ICON
         : t.icon ? iconSVG(t.icon) : String(markerIndex+1);
       inner += `<div class="pin" style="background:${t.color}">${pinContent}</div>`;
       if (t.flag) inner += `<div class="name">${escapeHTML(mk.name)}</div>`;
@@ -348,11 +350,13 @@
       const km = (mk.d/1000).toFixed(1);
       const opts = TYPE_ORDER.map(k=>
         `<option value="${k}" ${k===mk.type?"selected":""}>${TYPES[k].es}</option>`).join("");
-      return `<div class="mk-row" data-id="${mk.id}">
+      const typeIcon = t.flag ? FLAG_ICON : t.icon ? iconSVG(t.icon) : `<span class="type-generic" aria-hidden="true">•••</span>`;
+      const lockedDistance = t.flag;
+      return `<div class="mk-row${activeEditorMarkerId===mk.id?" editing":""}" data-id="${mk.id}">
         <span class="sw" style="background:${t.color}" title="Punto ${index+1}">${index+1}</span>
-        <label class="mk-field mk-name-field"><span>Acción</span><input type="text" class="mk-name" value="${escapeHTML(mk.name)}" placeholder="Nombre"></label>
-        <label class="mk-field mk-type-field"><span>Tipo</span><select class="mk-type">${opts}</select></label>
-        <label class="mk-field mk-dist-field"><span>Kilómetro</span><input type="number" class="mk-dist" value="${km}" min="0" max="${maxKm.toFixed(1)}" step="0.1" title="km"></label>
+        <label class="mk-field mk-name-field"><span>Nombre o acción</span><input type="text" class="mk-name" value="${escapeHTML(mk.name)}" placeholder="Ej. Tomar agua y gel"></label>
+        <label class="mk-field mk-type-field"><span>Tipo de punto</span><span class="mk-type-control"><span class="type-preview" style="background:${t.color}" aria-hidden="true">${typeIcon}</span><select class="mk-type">${opts}</select></span></label>
+        <label class="mk-field mk-dist-field"><span>Kilómetro de la ruta</span><span class="km-input-wrap"><input type="number" class="mk-dist" value="${km}" min="0" max="${maxKm.toFixed(1)}" step="0.1" ${lockedDistance?'readonly aria-readonly="true"':''}><span class="km-unit">km</span></span></label>
         <button class="del" title="Eliminar" aria-label="Eliminar">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>
         </button>
@@ -362,14 +366,38 @@
     list.querySelectorAll(".mk-row").forEach(row=>{
       const id = +row.dataset.id;
       const mk = markers.find(m=>m.id===id);
+      row.addEventListener("focusin", ()=>{
+        activeEditorMarkerId = id;
+        row.classList.add("editing");
+        draw();
+      });
+      row.addEventListener("focusout", e=>{
+        if (row.contains(e.relatedTarget)) return;
+        activeEditorMarkerId = null;
+        row.classList.remove("editing");
+        draw();
+      });
       row.querySelector(".mk-name").addEventListener("input", e=>{ mk.name=e.target.value; renderFlags(); });
-      row.querySelector(".mk-type").addEventListener("change", e=>{ mk.type=e.target.value; draw(); renderMkList(); });
-      row.querySelector(".mk-dist").addEventListener("change", e=>{
+      row.querySelector(".mk-type").addEventListener("change", e=>{
+        mk.type=e.target.value; activeEditorMarkerId=null; draw(); renderMkList();
+      });
+      const distInput = row.querySelector(".mk-dist");
+      distInput.addEventListener("input", e=>{
+        if ((TYPES[mk.type]||TYPES.point).flag || e.target.value==="") return;
+        const km = parseFloat(e.target.value);
+        if (!isFinite(km)) return;
+        mk.d = Math.max(0, Math.min(km, maxKm))*1000;
+        draw();
+      });
+      distInput.addEventListener("change", e=>{
+        if ((TYPES[mk.type]||TYPES.point).flag) return;
         let km = parseFloat(e.target.value); if(!isFinite(km)) km=0;
         km = Math.max(0, Math.min(km, maxKm));
-        mk.d = km*1000; draw(); renderMkList();
+        mk.d = km*1000; activeEditorMarkerId=null; draw(); renderMkList();
       });
-      row.querySelector(".del").addEventListener("click", ()=>{ markers=markers.filter(m=>m.id!==id); draw(); renderMkList(); });
+      row.querySelector(".del").addEventListener("click", ()=>{
+        markers=markers.filter(m=>m.id!==id); activeEditorMarkerId=null; draw(); renderMkList();
+      });
     });
   }
 
@@ -609,6 +637,7 @@
     $("#drop").classList.add("hidden");
     $("#result").classList.remove("hidden");
     $("#exportActions").classList.remove("hidden");
+    $("#viewerSub").textContent = "Haz clic sobre el perfil para añadir un punto";
     $("#trackName").textContent = name || "Perfil del recorrido";
     const s = stats(prof);
     $("#trackSub").textContent = `${(s.dist/1000).toFixed(1)} km · +${Math.round(s.gain)} m`;
@@ -814,7 +843,6 @@
         const res = await fetch(ruta);
         if (!res.ok) throw new Error("No se pudo cargar el recorrido (código "+res.status+").");
         const text = await res.text();
-        if (titulo) $("#viewerSub").textContent = titulo;
         await yieldToPaint();               // que el spinner se vea durante el parseo del GPX (p. ej. 80K)
         loadFromGPXText(text, null, titulo, ruta.split("/").pop());
         window.cumbreTrack?.("profile_rendered", { fuente: "catalog", distancia: distancia || "?" });

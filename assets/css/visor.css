@@ -105,6 +105,10 @@
     clip-path: polygon(0 0, 100% 0, 100% 66%, 50% 100%, 0 66%);
   }
   .flag .pin svg { width: 15px; height: 15px; }
+  .flag.editing .pin {
+    transform: translateY(-2px) scale(1.12);
+    box-shadow: 0 0 0 3px rgba(255,255,255,.9), 0 5px 12px rgba(0,0,0,.5);
+  }
   .flag .name {
     writing-mode: vertical-rl; text-orientation: mixed; transform: rotate(180deg);
     font-size: .66rem; font-weight: 700; letter-spacing: .03em; color: var(--poster-ink);
@@ -155,22 +159,46 @@
   .panel-head .sp { margin-left: auto; }
   .mk-list { display: flex; flex-direction: column; }
   .mk-row {
-    display: grid; grid-template-columns: 28px 1.6fr 90px 96px 34px; gap: 10px; align-items: center;
-    padding: 9px 18px; border-bottom: 1px solid var(--line);
+    display: grid; grid-template-columns: 28px minmax(180px,1.6fr) minmax(150px,.85fr) minmax(140px,.7fr) 34px;
+    gap: 10px; align-items: end; padding: 11px 18px; border-bottom: 1px solid var(--line);
+    transition: background .15s ease;
   }
+  .mk-row.editing { background: color-mix(in srgb, var(--accent) 5%, var(--panel)); }
   .mk-row:last-child { border-bottom: 0; }
   .mk-row .sw {
     width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
     color: #fff; font-size: .7rem; font-weight: 800; line-height: 1;
-    box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--line);
+    box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--line); margin-bottom: 7px;
   }
   .mk-field { display: block; min-width: 0; }
-  .mk-field > span { display: none; }
-  .mk-row input[type=text], .mk-row select, .mk-row input[type=number] {
-    font: inherit; font-size: .86rem; padding: 6px 9px; border: 1px solid var(--line);
-    border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%;
+  .mk-field > span:first-child {
+    display: block; margin: 0 0 4px 2px; color: var(--ink-mute);
+    font-size: .62rem; font-weight: 750; letter-spacing: .055em; text-transform: uppercase;
+    white-space: nowrap;
   }
-  .mk-row .del { border: none; background: transparent; color: var(--ink-mute); padding: 6px; border-radius: 7px; }
+  .mk-row input[type=text], .mk-row select, .mk-row input[type=number] {
+    font: inherit; font-size: .86rem; padding: 8px 9px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; min-height: 36px;
+  }
+  .mk-type-control, .km-input-wrap { display: flex; position: relative; min-width: 0; }
+  .mk-type-control .type-preview {
+    position: absolute; z-index: 1; left: 6px; top: 50%; transform: translateY(-50%);
+    width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center;
+    color: #fff; pointer-events: none; box-shadow: 0 0 0 1px rgba(0,0,0,.08);
+  }
+  .type-preview svg { width: 15px; height: 15px; }
+  .type-preview .type-generic { font-size: .65rem; font-weight: 900; letter-spacing: -.08em; transform: translateX(-1px); }
+  .mk-row .mk-type { padding-left: 36px; }
+  .km-input-wrap .mk-dist { padding-right: 34px; font-variant-numeric: tabular-nums; }
+  .km-input-wrap .km-unit {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    color: var(--ink-mute); font-size: .76rem; font-weight: 700; pointer-events: none;
+  }
+  .mk-row .mk-dist[readonly] {
+    color: var(--ink-soft); background: color-mix(in srgb, var(--line) 38%, var(--panel));
+    cursor: default;
+  }
+  .mk-row .del { border: none; background: transparent; color: var(--ink-mute); padding: 6px; border-radius: 7px; margin-bottom: 3px; }
   .mk-row .del:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
   .mk-empty { padding: 16px 18px; color: var(--ink-mute); font-size: .85rem; }
 
@@ -218,8 +246,8 @@
     .stat .v { font-size: 1.22rem; }
     .panel { margin-top: 14px; }
     .mk-row {
-      grid-template-columns: 24px minmax(0,1fr) 88px 34px;
-      grid-template-areas: "sw name name del" ". type dist .";
+      grid-template-columns: 24px minmax(0,1fr) 34px;
+      grid-template-areas: "sw name del" ". type ." ". dist .";
       gap: 8px 10px; padding: 11px 12px;
     }
     .mk-row .sw { grid-area: sw; }
@@ -227,9 +255,6 @@
     .mk-type-field { grid-area: type; }
     .mk-dist-field { grid-area: dist; }
     .mk-row .del { grid-area: del; }
-    .mk-field > span {
-      display: block; margin: 0 0 3px 2px; color: var(--ink-mute);
-      font-size: .62rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase;
-    }
+    .mk-field > span:first-child { white-space: normal; line-height: 1.15; }
     canvas#chart { height: 280px; }
   }
