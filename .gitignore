@@ -1,6 +1,9 @@
 # Vercel
 .vercel
 
+# Dependencies
+node_modules/
+
 # OS
 .DS_Store
 

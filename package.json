@@ -1,0 +1,17 @@
+{
+  "name": "cumbre",
+  "version": "1.0.0",
+  "description": "Visor de altimetría GPX para estrategia de nutrición en trail running",
+  "type": "module",
+  "scripts": {
+    "dev": "python3 -m http.server 5173",
+    "lint": "echo 'No linter configured'",
+    "test": "echo 'No tests configured'"
+  },
+  "keywords": ["gpx", "trail", "running", "altimetria"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@vercel/analytics": "^1.1.1"
+  }
+}

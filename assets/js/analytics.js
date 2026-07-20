@@ -10,22 +10,23 @@
  * Si algún día migras a Plausible/Umami, solo cambia el cuerpo de
  * `window.cumbreTrack`; los puntos de llamada en index.js / visor.js no cambian.
  */
-(() => {
-  "use strict";
 
-  // Cola de Vercel Web Analytics: captura eventos disparados antes de que
-  // el script de insights termine de cargar. (Definir aquí, no inline en el
-  // HTML, para no violar `script-src 'self'`.)
-  window.va = window.va || function () {
-    (window.vaq = window.vaq || []).push(arguments);
-  };
+// Import and initialize Vercel Web Analytics using the @vercel/analytics package
+import { inject } from '/assets/vendor/analytics.mjs';
 
-  // API única que usa el resto de la app.
-  window.cumbreTrack = function (name, data) {
-    try {
+// Initialize analytics with auto mode detection
+inject({
+  mode: 'auto',
+  debug: false
+});
+
+// API única que usa el resto de la app.
+window.cumbreTrack = function (name, data) {
+  try {
+    if (window.va) {
       window.va("event", { name: name, data: data || {} });
-    } catch (_) {
-      /* la analítica nunca debe romper la app */
     }
-  };
-})();
+  } catch (_) {
+    /* la analítica nunca debe romper la app */
+  }
+};
