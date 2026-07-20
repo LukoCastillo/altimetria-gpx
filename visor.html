@@ -92,7 +92,11 @@
   .poster-head h2 { margin: 0; font-size: 1.05rem; font-weight: 800; letter-spacing: .01em; }
   .poster-head .sub { font-size: .8rem; color: var(--poster-mute); letter-spacing: .04em; text-transform: uppercase; }
   .chart-stage { position: relative; width: 100%; }
-  canvas#chart { display: block; width: 100%; height: 380px; touch-action: none; }
+  .chart-stage, .chart-stage * {
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+  }
+  canvas#chart { display: block; width: 100%; height: 380px; touch-action: pan-y; }
   .overlay { position: absolute; inset: 0; pointer-events: none; }
 
   /* flags */
@@ -123,14 +127,21 @@
     background: rgba(10,14,20,.94); color: #fff; border: 1px solid rgba(255,255,255,.14);
     border-radius: 9px; padding: 8px 11px; font-size: .78rem; white-space: nowrap;
     box-shadow: 0 6px 22px rgba(0,0,0,.5); opacity: 0; transition: opacity .1s;
-    font-variant-numeric: tabular-nums;
+    font-variant-numeric: tabular-nums; max-width: calc(100% - 20px);
   }
+  .tip.locked { pointer-events: auto; }
   .tip b { color: #fff; font-variant-numeric: tabular-nums; }
   .tip .r { display: flex; justify-content: space-between; gap: 16px; }
   .tip .r span:first-child { color: rgba(255,255,255,.55); }
   .tip .tw { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: .82rem;
-    margin-bottom: 5px; padding-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,.15); }
+    margin-bottom: 5px; padding-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,.15);
+    max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
   .tip .tw .dotc { width: 9px; height: 9px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px rgba(255,255,255,.25); }
+  .tip .tip-add {
+    width: 100%; justify-content: center; margin-top: 8px; padding: 6px 9px;
+    border-color: rgba(255,255,255,.2); background: #fff; color: #2b2a24;
+    font-size: .74rem; min-height: 42px; touch-action: manipulation;
+  }
 
   /* stats */
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 16px 0 0; }
@@ -271,7 +282,7 @@
       <div class="chart-stage">
         <canvas id="chart"></canvas>
         <div class="overlay" id="overlay"></div>
-        <div class="tip" id="tip"></div>
+        <div class="tip" id="tip" role="status" aria-live="polite"></div>
       </div>
     </div>
 
@@ -305,6 +316,8 @@
   let hoverIdx = -1;
   let mkDots = [];           // {x,y,mk,color} posiciones de waypoints sobre la curva
   let hoverDot = null;
+  let touchLocked = false;
+  let lastPointerType = "mouse";
   let sourceGPX = "";        // XML original para poder exportar el track completo
   let sourceRaw = [];         // {lat,lon,e}, alineado con profile
   let sourceFileName = "recorrido.gpx";
@@ -929,21 +942,29 @@
     return (meters-profile[lo].d < profile[hi].d-meters)?lo:hi;
   }
 
-  canvas.addEventListener("pointermove", e=>{
-    const idx = pointerToIdx(e.clientX);
-    if (idx<0){ hoverIdx=-1; hoverDot=null; tip.style.opacity=0; canvas.style.cursor="default"; draw(); return; }
-    // ¿el cursor está sobre un punto de waypoint?
+  function markerNear(clientX, clientY, radius=18){
     const r = canvas.getBoundingClientRect();
-    const px = e.clientX-r.left, py = e.clientY-r.top;
-    let near=null, best=15;
-    for (const d of mkDots){ const dist=Math.hypot(d.x-px, d.y-py); if(dist<best){best=dist;near=d;} }
-    hoverIdx = idx; hoverDot = near; draw();
+    const px = clientX-r.left, py = clientY-r.top;
+    let near=null, best=radius;
+    for (const d of mkDots){
+      const dist=Math.hypot(d.x-px, d.y-py);
+      if(dist<best){best=dist;near=d;}
+    }
+    return near;
+  }
+
+  function showTooltip(idx, near, locked=false){
+    const anchorX = near ? near.x : plot.Xm(profile[idx].d);
+    const anchorY = near ? near.y : plot.Y(profile[idx].e);
+    const safePad = locked ? Math.min(115, canvas.clientWidth/2) : 74;
+    const safeX = Math.max(safePad, Math.min(anchorX, canvas.clientWidth-safePad));
+    tip.classList.toggle("locked", locked);
+    tip.setAttribute("role", locked ? "dialog" : "status");
+    tip.style.left = safeX+"px";
+    tip.style.top = anchorY+"px";
     tip.style.opacity = 1;
-    canvas.style.cursor = near ? "pointer" : "crosshair";
     if (near){
       const t = TYPES[near.mk.type] || TYPES.point;
-      tip.style.left = near.x+"px";
-      tip.style.top = near.y+"px";
       tip.innerHTML =
         `<div class="tw" style="color:${t.color}"><span class="dotc" style="background:${t.color}"></span>${escapeHTML(near.mk.name)}</div>`+
         `<div class="r"><span>Tipo</span><b>${t.es}</b></div>`+
@@ -952,21 +973,64 @@
         (near.mk.note?`<div class="r"><span>Nota</span><b>${escapeHTML(near.mk.note)}</b></div>`:"");
     } else {
       const p = profile[idx];
-      tip.style.left = plot.Xm(p.d)+"px";
-      tip.style.top = plot.Y(p.e)+"px";
       tip.innerHTML = `<div class="r"><span>Distancia</span><b>${(p.d/1000).toFixed(2)} km</b></div>`+
-                      `<div class="r"><span>Altitud</span><b>${Math.round(p.e)} m</b></div>`;
+                      `<div class="r"><span>Altitud</span><b>${Math.round(p.e)} m</b></div>`+
+                      (locked ? `<button type="button" class="tip-add" data-meters="${p.d}">+ Añadir punto aquí</button>` : "");
     }
+  }
+
+  function clearTouchInspect(){
+    if (!touchLocked) return;
+    touchLocked=false; hoverIdx=-1; hoverDot=null;
+    tip.classList.remove("locked"); tip.setAttribute("role","status");
+    tip.style.opacity=0; canvas.style.cursor="default"; draw();
+  }
+
+  canvas.addEventListener("pointerdown", e=>{ lastPointerType=e.pointerType || "mouse"; });
+  canvas.addEventListener("pointermove", e=>{
+    if (e.pointerType === "touch") return;
+    touchLocked = false; tip.classList.remove("locked"); tip.setAttribute("role","status");
+    const idx = pointerToIdx(e.clientX);
+    if (idx<0){ hoverIdx=-1; hoverDot=null; tip.style.opacity=0; canvas.style.cursor="default"; draw(); return; }
+    const near = markerNear(e.clientX, e.clientY);
+    hoverIdx = idx; hoverDot = near; draw();
+    canvas.style.cursor = near ? "pointer" : "crosshair";
+    showTooltip(idx, near, false);
   });
-  canvas.addEventListener("pointerleave", ()=>{ hoverIdx=-1; hoverDot=null; tip.style.opacity=0; canvas.style.cursor="default"; draw(); });
+  canvas.addEventListener("pointerleave", ()=>{
+    if (touchLocked) return;
+    hoverIdx=-1; hoverDot=null; tip.style.opacity=0; canvas.style.cursor="default"; draw();
+  });
   canvas.addEventListener("click", e=>{
     if (!plot) return;
     const r = canvas.getBoundingClientRect();
     const x = e.clientX-r.left, y = e.clientY-r.top;
     if (x<plot.x-6 || x>plot.x+plot.w+6 || y<plot.y || y>plot.y+plot.h+6) return;
+    const isTouch = e.pointerType === "touch" || lastPointerType === "touch";
+    if (isTouch){
+      const idx = pointerToIdx(e.clientX);
+      if (idx<0) return;
+      const near = markerNear(e.clientX, e.clientY, 28);
+      touchLocked=true; hoverIdx=idx; hoverDot=near; draw();
+      showTooltip(idx, near, true);
+      return;
+    }
     if (mkDots.some(d=>Math.hypot(d.x-x, d.y-y)<15)) return; // ya hay un punto aquí
     const km = Math.max(0, Math.min(((x-plot.x)/plot.w)*plot.distKm, plot.distKm));
     addMarker(km*1000, "point", "Punto "+(markers.length+1));
+  });
+
+  tip.addEventListener("click", e=>{
+    const btn = e.target.closest(".tip-add");
+    if (!btn) return;
+    e.preventDefault(); e.stopPropagation();
+    const meters = parseFloat(btn.dataset.meters);
+    if (!isFinite(meters)) return;
+    touchLocked=false; tip.classList.remove("locked"); tip.style.opacity=0;
+    addMarker(meters, "point", "Punto "+(markers.length+1));
+  });
+  document.addEventListener("pointerdown", e=>{
+    if (touchLocked && e.pointerType==="touch" && !e.target.closest(".chart-stage")) clearTouchInspect();
   });
 
   // ---------- wiring ----------
