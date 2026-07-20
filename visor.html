@@ -61,6 +61,7 @@
   .brand h1 { margin: 0; font-size: 1.32rem; font-weight: 800; letter-spacing: -.02em; }
   .brand p { margin: 1px 0 0; font-size: .82rem; color: var(--ink-mute); letter-spacing: .02em; }
   .head-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+  .export-actions { display: flex; gap: 10px; align-items: center; }
 
   button, .btn {
     font: inherit; font-weight: 650; cursor: pointer; border: 1px solid var(--line);
@@ -177,7 +178,11 @@
   .drop .fmt { font-size: .76rem; color: var(--ink-mute); margin-top: 14px; }
   .hidden { display: none !important; }
   footer { margin-top: 30px; font-size: .76rem; color: var(--ink-mute); text-align: center; }
-  @media (max-width: 620px) {
+  @media (max-width: 760px) {
+    header.masthead { align-items: stretch; }
+    .head-actions { width: 100%; margin-left: 0; flex-wrap: wrap; }
+    .export-actions { display: contents; }
+    .head-actions .btn, .head-actions button { flex: 1; justify-content: center; }
     .mk-row { grid-template-columns: 20px 1fr 70px 34px; }
     .mk-row .mk-dist { display: none; }
     canvas#chart { height: 340px; }
@@ -200,6 +205,16 @@
       </div>
     </a>
     <div class="head-actions">
+      <div id="exportActions" class="export-actions hidden">
+        <button id="downloadGpx" class="btn" title="Descargar el recorrido con todos los puntos de interés">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 19h16"/></svg>
+          Descargar GPX
+        </button>
+        <button id="downloadPdf" class="btn" title="Descargar la altimetría y la tabla de acciones">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l4 4v16H6z"/><path d="M14 2v5h5M9 13h6M9 17h6"/></svg>
+          Descargar PDF
+        </button>
+      </div>
       <button id="importBtn" class="btn-primary">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3m0 0L8 7m4-4 4 4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
         Importar GPX
@@ -259,6 +274,10 @@
   let hoverIdx = -1;
   let mkDots = [];           // {x,y,mk,color} posiciones de waypoints sobre la curva
   let hoverDot = null;
+  let sourceGPX = "";        // XML original para poder exportar el track completo
+  let sourceRaw = [];         // {lat,lon,e}, alineado con profile
+  let sourceFileName = "recorrido.gpx";
+  let sourceUsesWptAsTrack = false;
 
   const TYPES = {
     start:  { color:"#63bb43", es:"Salida",          flag:true },
@@ -312,7 +331,7 @@
       name: (w.getElementsByTagName("name")[0]?.textContent||"").trim(),
       type: (w.getElementsByTagName("type")[0]?.textContent||"").trim().toUpperCase(),
     })).filter(w=>isFinite(w.lat)&&isFinite(w.lon));
-    return { raw, name, waypoints };
+    return { raw, name, waypoints, usedWptAsTrack };
   }
 
   // km del nombre ("KM5.5 GOLF" → 5.5), o null
@@ -583,13 +602,13 @@
       const id = +row.dataset.id;
       const mk = markers.find(m=>m.id===id);
       row.querySelector(".mk-name").addEventListener("input", e=>{ mk.name=e.target.value; renderFlags(); });
-      row.querySelector(".mk-type").addEventListener("change", e=>{ mk.type=e.target.value; renderFlags(); renderMkList(); });
+      row.querySelector(".mk-type").addEventListener("change", e=>{ mk.type=e.target.value; draw(); renderMkList(); });
       row.querySelector(".mk-dist").addEventListener("change", e=>{
         let km = parseFloat(e.target.value); if(!isFinite(km)) km=0;
         km = Math.max(0, Math.min(km, maxKm));
-        mk.d = km*1000; renderFlags();
+        mk.d = km*1000; draw();
       });
-      row.querySelector(".del").addEventListener("click", ()=>{ markers=markers.filter(m=>m.id!==id); renderFlags(); renderMkList(); });
+      row.querySelector(".del").addEventListener("click", ()=>{ markers=markers.filter(m=>m.id!==id); draw(); renderMkList(); });
     });
   }
 
@@ -597,6 +616,223 @@
   function addMarker(meters, type="point", name){
     markers.push({ id:mkSeq++, d:meters, type, name: name || (type==="start"?"Salida":type==="finish"?"Meta":"Punto "+mkSeq) });
     renderFlags(); renderMkList();
+  }
+
+  // ---------- exports ----------
+  function safeBaseName(name){
+    return (name || "recorrido").replace(/\.gpx$/i, "").replace(/[\\/:*?"<>|]+/g, "-").trim() || "recorrido";
+  }
+
+  function downloadBlob(blob, fileName){
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = fileName;
+    a.style.display = "none";
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ a.remove(); URL.revokeObjectURL(url); }, 1500);
+  }
+
+  function trackPositionAt(meters){
+    const end = profile[profile.length-1].d;
+    const d = Math.max(0, Math.min(meters, end));
+    if (d <= 0) return { ...sourceRaw[0], e:profile[0].e };
+    if (d >= end) return { ...sourceRaw[sourceRaw.length-1], e:profile[profile.length-1].e };
+    let lo=0, hi=profile.length-1;
+    while (hi-lo>1){ const mid=(lo+hi)>>1; if(profile[mid].d<d) lo=mid; else hi=mid; }
+    const span = profile[hi].d-profile[lo].d;
+    const t = span ? (d-profile[lo].d)/span : 0;
+    return {
+      lat: sourceRaw[lo].lat+(sourceRaw[hi].lat-sourceRaw[lo].lat)*t,
+      lon: sourceRaw[lo].lon+(sourceRaw[hi].lon-sourceRaw[lo].lon)*t,
+      e: profile[lo].e+(profile[hi].e-profile[lo].e)*t,
+    };
+  }
+
+  function buildGPXWithMarkers(){
+    const doc = new DOMParser().parseFromString(sourceGPX, "application/xml");
+    if (doc.querySelector("parsererror")) throw new Error("No se pudo reconstruir el GPX original.");
+    const root = doc.documentElement;
+    const ns = root.namespaceURI || "http://www.topografix.com/GPX/1/1";
+    // En un GPX normal reemplazamos sus waypoints por el estado actual del editor.
+    // Si el archivo usa <wpt> como única geometría, se conservan para no borrar la ruta.
+    if (!sourceUsesWptAsTrack) [...root.children].filter(el=>el.localName==="wpt").forEach(el=>el.remove());
+    const firstRoute = [...root.children].find(el=>el.localName==="rte" || el.localName==="trk") || null;
+    const typeMap = { food:"FOOD", water:"WATER", summit:"SUMMIT", turn:"STRAIGHT",
+      start:"GENERIC", finish:"GENERIC", point:"GENERIC" };
+    const sorted = [...markers].sort((a,b)=>a.d-b.d);
+    for (const mk of sorted){
+      const pos = trackPositionAt(mk.d);
+      const wpt = doc.createElementNS(ns, "wpt");
+      wpt.setAttribute("lat", pos.lat.toFixed(7));
+      wpt.setAttribute("lon", pos.lon.toFixed(7));
+      const ele = doc.createElementNS(ns, "ele"); ele.textContent = pos.e.toFixed(1); wpt.appendChild(ele);
+      const name = doc.createElementNS(ns, "name"); name.textContent = mk.name || TYPES[mk.type]?.es || "Punto"; wpt.appendChild(name);
+      const desc = doc.createElementNS(ns, "desc");
+      desc.textContent = `Km ${(mk.d/1000).toFixed(2)} · ${TYPES[mk.type]?.es || "Punto"}`;
+      wpt.appendChild(desc);
+      const type = doc.createElementNS(ns, "type"); type.textContent = typeMap[mk.type] || "GENERIC"; wpt.appendChild(type);
+      root.insertBefore(wpt, firstRoute);
+    }
+    const serialized = new XMLSerializer().serializeToString(doc)
+      .replace(/^\s*<\?xml[^?]*\?>\s*/i, "");
+    return '<?xml version="1.0" encoding="UTF-8"?>\n'+serialized;
+  }
+
+  function exportGPX(){
+    try{
+      const xml = buildGPXWithMarkers();
+      downloadBlob(new Blob([xml], {type:"application/gpx+xml;charset=utf-8"}), safeBaseName(sourceFileName)+"-con-puntos.gpx");
+    }catch(err){ alert("No se pudo crear el GPX:\n"+err.message); }
+  }
+
+  function makeExportChart(){
+    const out = document.createElement("canvas"), w=1400, h=650;
+    out.width=w; out.height=h;
+    const c=out.getContext("2d");
+    c.fillStyle="#f7f5ee"; c.fillRect(0,0,w,h);
+    c.fillStyle="#2b2a24"; c.font="800 30px system-ui, sans-serif";
+    c.fillText($("#trackName").textContent || "Perfil del recorrido", 72, 48);
+    c.fillStyle="#6b6758"; c.font="600 17px system-ui, sans-serif";
+    c.fillText($("#trackSub").textContent+" · Los números corresponden a la tabla de acciones", 72, 76);
+
+    const m={l:82,r:38,t:125,b:55}, pw=w-m.l-m.r, ph=h-m.t-m.b;
+    const end=profile[profile.length-1].d, distKm=end/1000;
+    const elev=profile.map(p=>p.e), min=Math.min(...elev), max=Math.max(...elev);
+    const pad=Math.max((max-min)*.12,10), yLo=min-pad, yHi=max+pad;
+    const X=d=>m.l+(d/end)*pw, Y=e=>m.t+ph-((e-yLo)/(yHi-yLo))*ph;
+
+    c.strokeStyle="rgba(74,66,40,.16)"; c.lineWidth=1;
+    c.font="600 14px system-ui, sans-serif"; c.fillStyle="#6b6758";
+    c.textAlign="right"; c.textBaseline="middle";
+    const yStep=niceStep(yHi-yLo,5);
+    for(let v=Math.ceil(yLo/yStep)*yStep;v<=yHi;v+=yStep){
+      const y=Y(v); c.beginPath(); c.moveTo(m.l,y); c.lineTo(m.l+pw,y); c.stroke(); c.fillText(Math.round(v)+" m",m.l-10,y);
+    }
+    const xStep=niceStep(distKm,8);
+    c.textAlign="center"; c.textBaseline="top";
+    for(let km=0;km<=distKm+.0001;km+=xStep){
+      const x=X(km*1000); c.beginPath(); c.moveTo(x,m.t); c.lineTo(x,m.t+ph); c.stroke(); c.fillText(Math.round(km)+" km",x,m.t+ph+12);
+    }
+    const grad=c.createLinearGradient(0,m.t,0,m.t+ph);
+    grad.addColorStop(0,"#79542e"); grad.addColorStop(.5,"#6d6134"); grad.addColorStop(1,"#5c6a33");
+    c.beginPath(); c.moveTo(X(0),m.t+ph);
+    profile.forEach(p=>c.lineTo(X(p.d),Y(p.e)));
+    c.lineTo(X(end),m.t+ph); c.closePath(); c.fillStyle=grad; c.fill();
+    c.beginPath(); profile.forEach((p,i)=>i?c.lineTo(X(p.d),Y(p.e)):c.moveTo(X(p.d),Y(p.e)));
+    c.strokeStyle="#3f4a23"; c.lineWidth=3; c.lineJoin="round"; c.stroke();
+
+    const sorted=[...markers].sort((a,b)=>a.d-b.d);
+    sorted.forEach((mk,i)=>{
+      const x=X(Math.max(0,Math.min(mk.d,end))), y=Y(eleAt(mk.d));
+      const color=(TYPES[mk.type]||TYPES.point).color;
+      c.beginPath(); c.arc(x,y,13,0,Math.PI*2); c.fillStyle=color; c.fill();
+      c.lineWidth=3; c.strokeStyle="#fff"; c.stroke();
+      c.fillStyle="#fff"; c.font="800 13px system-ui, sans-serif"; c.textAlign="center"; c.textBaseline="middle";
+      c.fillText(String(i+1),x,y+.5);
+    });
+    return out;
+  }
+
+  function pdfText(value){
+    const replacements={"–":"-","—":"-","‘":"'","’":"'","“":'"',"”":'"',"…":"..."};
+    let out="";
+    for(const ch of String(value).replace(/[–—‘’“”…]/g,c=>replacements[c])){
+      const code=ch.charCodeAt(0), safe=code<=255?ch:"?";
+      out += safe==="\\"?"\\\\":safe==="("?"\\(":safe===")"?"\\)":safe;
+    }
+    return out;
+  }
+  const pdfLabel = (text,x,y,size=11,bold=false) =>
+    `BT /${bold?"F2":"F1"} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${pdfText(text)}) Tj ET\n`;
+
+  function wrapAction(text, max=105){
+    const words=String(text||"Punto").split(/\s+/), lines=[];
+    let line="";
+    for(const word of words){
+      if(!line){ line=word; continue; }
+      if((line+" "+word).length<=max) line+=" "+word;
+      else { lines.push(line); line=word; }
+    }
+    if(line) lines.push(line);
+    return lines.length ? lines : ["Punto"];
+  }
+
+  function tableCommands(rows, yTop, continued=false){
+    let s=pdfLabel(continued?"Tabla de acciones (continuación)":"Tabla de acciones",46,yTop+24,14,true);
+    const x0=46, x1=82, x2=158, x3=796, headerH=18;
+    s += "0.91 g "+x0+" "+(yTop-headerH)+" "+(x3-x0)+" "+headerH+" re f 0 g\n";
+    s += pdfLabel("#",58,yTop-13,9,true)+pdfLabel("Kilómetro",91,yTop-13,9,true)+pdfLabel("Acción",168,yTop-13,9,true);
+    let y=yTop-headerH;
+    rows.forEach(row=>{
+      const rh=Math.max(18,row.lines.length*12+6);
+      s += `0.82 G 0.5 w ${x0} ${y-rh} m ${x3} ${y-rh} l S\n`;
+      s += pdfLabel(row.num,58,y-13,9)+pdfLabel(row.km,91,y-13,9);
+      row.lines.forEach((line,i)=>{ s+=pdfLabel(line,168,y-13-i*12,9); });
+      y-=rh;
+    });
+    s += `0.72 G 0.7 w ${x0} ${yTop} m ${x3} ${yTop} l ${x3} ${y} l ${x0} ${y} l h S\n`;
+    [x1,x2].forEach(x=>{s+=`${x} ${yTop} m ${x} ${y} l S\n`;});
+    return s;
+  }
+
+  function buildPDF(jpegBinary, imageWidth, imageHeight){
+    const rows=[...markers].sort((a,b)=>a.d-b.d).map((mk,i)=>({
+      num:String(i+1), km:(mk.d/1000).toFixed(2)+" km",
+      lines:wrapAction(mk.name || TYPES[mk.type]?.es || "Punto")
+    }));
+    const groups=[];
+    let capacity=7, group=[], used=0;
+    for(const row of rows){
+      const units=Math.max(1,row.lines.length);
+      if(group.length && used+units>capacity){ groups.push(group); group=[]; used=0; capacity=25; }
+      group.push(row); used+=units;
+    }
+    groups.push(group);
+    const pageCount=groups.length, objects=[];
+    objects[1]="<< /Type /Catalog /Pages 2 0 R >>";
+    const kids=groups.map((_,i)=>(5+i*2)+" 0 R").join(" ");
+    objects[2]=`<< /Type /Pages /Kids [${kids}] /Count ${pageCount} >>`;
+    objects[3]="<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
+    objects[4]="<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>";
+    const imageId=5+pageCount*2;
+    objects[imageId]=`<< /Type /XObject /Subtype /Image /Width ${imageWidth} /Height ${imageHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBinary.length} >>\nstream\n${jpegBinary}\nendstream`;
+    groups.forEach((group,i)=>{
+      const pageId=5+i*2, contentId=pageId+1;
+      let content;
+      if(i===0){
+        content=`q 750 0 0 348 46 235 cm /Im1 Do Q\n`+tableCommands(group,205,false);
+      }else{
+        content=pdfLabel($("#trackName").textContent || "Perfil del recorrido",46,562,18,true)+tableCommands(group,530,true);
+      }
+      objects[pageId]=`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> /XObject << /Im1 ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>`;
+      objects[contentId]=`<< /Length ${content.length} >>\nstream\n${content}endstream`;
+    });
+    let pdf="%PDF-1.4\n%âãÏÓ\n", offsets=[0];
+    for(let i=1;i<objects.length;i++){
+      if(!objects[i]) continue;
+      offsets[i]=pdf.length;
+      pdf+=`${i} 0 obj\n${objects[i]}\nendobj\n`;
+    }
+    const xref=pdf.length;
+    pdf+=`xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+    for(let i=1;i<objects.length;i++) pdf+=(offsets[i]||0).toString().padStart(10,"0")+" 00000 n \n";
+    pdf+=`trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+    const bytes=new Uint8Array(pdf.length);
+    for(let i=0;i<pdf.length;i++) bytes[i]=pdf.charCodeAt(i)&255;
+    return new Blob([bytes],{type:"application/pdf"});
+  }
+
+  async function exportPDF(){
+    const btn=$("#downloadPdf"), original=btn.innerHTML;
+    try{
+      btn.disabled=true; btn.textContent="Preparando PDF…";
+      const chart=makeExportChart();
+      const data=chart.toDataURL("image/jpeg",.92).split(",")[1];
+      const jpeg=atob(data);
+      const pdf=buildPDF(jpeg,chart.width,chart.height);
+      downloadBlob(pdf,safeBaseName(sourceFileName)+"-altimetria.pdf");
+    }catch(err){ alert("No se pudo crear el PDF:\n"+err.message); }
+    finally{ btn.disabled=false; btn.innerHTML=original; }
   }
 
   // ---------- load ----------
@@ -608,6 +844,7 @@
     ];
     $("#drop").classList.add("hidden");
     $("#result").classList.remove("hidden");
+    $("#exportActions").classList.remove("hidden");
     $("#trackName").textContent = name || "Perfil del recorrido";
     const s = stats(prof);
     $("#trackSub").textContent = `${(s.dist/1000).toFixed(1)} km · +${Math.round(s.gain)} m`;
@@ -615,10 +852,14 @@
     requestAnimationFrame(draw);
   }
 
-  function loadFromGPXText(text, fallbackName, titleOverride){
-    const { raw, name, waypoints } = parseGPX(text);
+  function loadFromGPXText(text, fallbackName, titleOverride, fileName){
+    const { raw, name, waypoints, usedWptAsTrack } = parseGPX(text);
     const prof = buildProfile(raw);
     if (prof[prof.length-1].d < 1) throw new Error("El recorrido no tiene distancia (¿coordenadas iguales?).");
+    sourceGPX = text;
+    sourceRaw = raw;
+    sourceFileName = fileName || fallbackName || name || "recorrido.gpx";
+    sourceUsesWptAsTrack = usedWptAsTrack;
     mkSeq = 1;
     const mks = markersFromWpts(prof, raw, waypoints);
     load(prof, titleOverride || name || fallbackName, mks);
@@ -627,7 +868,7 @@
   async function handleFile(file){
     try{
       const text = await file.text();
-      loadFromGPXText(text, file.name.replace(/\.gpx$/i,""));
+      loadFromGPXText(text, file.name.replace(/\.gpx$/i,""), null, file.name);
     }catch(err){
       alert("No se pudo leer el GPX:\n"+err.message);
     }
@@ -692,6 +933,8 @@
   $("#importBtn").addEventListener("click", ()=>$("#fileInput").click());
   $("#fileInput").addEventListener("change", e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); e.target.value=""; });
   $("#addMk").addEventListener("click", ()=> addMarker(profile[profile.length-1].d*0.5, "point"));
+  $("#downloadGpx").addEventListener("click", exportGPX);
+  $("#downloadPdf").addEventListener("click", exportPDF);
 
   const drop = $("#drop");
   ["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev, e=>{e.preventDefault();drop.classList.add("over");}));
@@ -722,7 +965,7 @@
         sessionStorage.removeItem("cumbre_gpx_text");
         sessionStorage.removeItem("cumbre_gpx_name");
         if (!text) throw new Error("No se encontró el archivo cargado. Vuelve a intentarlo desde el inicio.");
-        loadFromGPXText(text, name);
+        loadFromGPXText(text, name, null, name);
       } else {
         const res = await fetch(ruta);
         if (!res.ok) throw new Error("No se pudo cargar el recorrido (código "+res.status+").");
@@ -731,7 +974,7 @@
         const distancia = params.get("distancia");
         const titulo = (carrera && distancia) ? `${carrera} · ${distancia}` : (carrera || distancia || null);
         if (titulo) $("#viewerSub").textContent = titulo;
-        loadFromGPXText(text, null, titulo);
+        loadFromGPXText(text, null, titulo, ruta.split("/").pop());
       }
     }catch(err){
       $("#drop").innerHTML = `<h2>No se pudo cargar el recorrido</h2><p>${escapeHTML(err.message)}</p>`+
