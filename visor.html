@@ -76,7 +76,7 @@
   }
   .btn-primary { background: var(--accent); color: #fff; border-color: transparent; }
   .btn-primary:hover { border-color: transparent; filter: brightness(1.06); }
-  .btn svg { width: 16px; height: 16px; }
+  button svg, .btn svg { width: 16px; height: 16px; flex: none; }
   .icon-btn { padding: 9px; }
 
   /* poster / chart panel */
@@ -92,7 +92,7 @@
   .poster-head h2 { margin: 0; font-size: 1.05rem; font-weight: 800; letter-spacing: .01em; }
   .poster-head .sub { font-size: .8rem; color: var(--poster-mute); letter-spacing: .04em; text-transform: uppercase; }
   .chart-stage { position: relative; width: 100%; }
-  canvas#chart { display: block; width: 100%; height: 440px; touch-action: none; }
+  canvas#chart { display: block; width: 100%; height: 380px; touch-action: none; }
   .overlay { position: absolute; inset: 0; pointer-events: none; }
 
   /* flags */
@@ -115,6 +115,7 @@
     font-size: .66rem; font-weight: 700; letter-spacing: .03em; color: var(--poster-ink);
     margin: 3px auto 0; white-space: nowrap; text-shadow: 0 1px 2px rgba(255,255,255,.85);
   }
+  .flag.poi .pin { border-radius: 50%; clip-path: none; width: 27px; height: 27px; }
 
   /* tooltip */
   .tip {
@@ -134,11 +135,11 @@
   /* stats */
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 16px 0 0; }
   .stat {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px;
     box-shadow: var(--shadow);
   }
   .stat .k { font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-mute); font-weight: 700; }
-  .stat .v { font-size: 1.5rem; font-weight: 800; letter-spacing: -.01em; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .stat .v { font-size: 1.35rem; font-weight: 800; letter-spacing: -.01em; margin-top: 2px; font-variant-numeric: tabular-nums; }
   .stat .v small { font-size: .78rem; font-weight: 650; color: var(--ink-soft); margin-left: 2px; }
   .stat.gain .v { color: #2e7d32; }
   .stat.loss .v { color: #b4622c; }
@@ -154,11 +155,17 @@
   .panel-head .sp { margin-left: auto; }
   .mk-list { display: flex; flex-direction: column; }
   .mk-row {
-    display: grid; grid-template-columns: 22px 1.6fr 90px 96px 34px; gap: 10px; align-items: center;
+    display: grid; grid-template-columns: 28px 1.6fr 90px 96px 34px; gap: 10px; align-items: center;
     padding: 9px 18px; border-bottom: 1px solid var(--line);
   }
   .mk-row:last-child { border-bottom: 0; }
-  .mk-row .sw { width: 16px; height: 16px; border-radius: 5px; }
+  .mk-row .sw {
+    width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+    color: #fff; font-size: .7rem; font-weight: 800; line-height: 1;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--line);
+  }
+  .mk-field { display: block; min-width: 0; }
+  .mk-field > span { display: none; }
   .mk-row input[type=text], .mk-row select, .mk-row input[type=number] {
     font: inherit; font-size: .86rem; padding: 6px 9px; border: 1px solid var(--line);
     border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%;
@@ -180,12 +187,36 @@
   footer { margin-top: 30px; font-size: .76rem; color: var(--ink-mute); text-align: center; }
   @media (max-width: 760px) {
     header.masthead { align-items: stretch; }
-    .head-actions { width: 100%; margin-left: 0; flex-wrap: wrap; }
+    .head-actions {
+      width: 100%; margin-left: 0; display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
     .export-actions { display: contents; }
-    .head-actions .btn, .head-actions button { flex: 1; justify-content: center; }
-    .mk-row { grid-template-columns: 20px 1fr 70px 34px; }
-    .mk-row .mk-dist { display: none; }
-    canvas#chart { height: 340px; }
+    .head-actions .btn, .head-actions button {
+      width: 100%; min-width: 0; padding-inline: 8px; justify-content: center;
+      font-size: .82rem;
+    }
+    .panel-head { flex-wrap: wrap; }
+    .panel-head .hint { order: 3; width: 100%; }
+    .stats { gap: 8px; margin-top: 12px; }
+    .stat { padding: 8px 11px; }
+    .stat .v { font-size: 1.22rem; }
+    .panel { margin-top: 14px; }
+    .mk-row {
+      grid-template-columns: 24px minmax(0,1fr) 88px 34px;
+      grid-template-areas: "sw name name del" ". type dist .";
+      gap: 8px 10px; padding: 11px 12px;
+    }
+    .mk-row .sw { grid-area: sw; }
+    .mk-name-field { grid-area: name; }
+    .mk-type-field { grid-area: type; }
+    .mk-dist-field { grid-area: dist; }
+    .mk-row .del { grid-area: del; }
+    .mk-field > span {
+      display: block; margin: 0 0 3px 2px; color: var(--ink-mute);
+      font-size: .62rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase;
+    }
+    canvas#chart { height: 280px; }
   }
 </style>
 </head>
@@ -419,7 +450,7 @@
     const yHi = Math.max(yTk.t[yTk.t.length-1], eMax+pad*0.4);
     const xTk = ticks(0, distKm, Math.min(8, Math.max(4, Math.round(distKm/5))));
 
-    const m = { l: 58, r: 18, t: 96, b: 34 };
+    const m = { l: 58, r: 18, t: cssH<=320 ? 72 : 84, b: 34 };
     plot = { x:m.l, y:m.t, w:cssW-m.l-m.r, h:cssH-m.t-m.b, distKm, yLo, yHi };
 
     const X = km => plot.x + (km/distKm)*plot.w;
@@ -495,15 +526,23 @@
     // waypoint dots on the curve (mismo color del banderín)
     mkDots = [];
     const endD = profile[profile.length-1].d;
-    for (const mk of markers){
+    const orderedMarkers = [...markers].sort((a,b)=>a.d-b.d);
+    for (let markerIndex=0; markerIndex<orderedMarkers.length; markerIndex++){
+      const mk = orderedMarkers[markerIndex];
       const t = TYPES[mk.type] || TYPES.point;
       const dm = Math.max(0, Math.min(mk.d, endD));
       const x = Xm(dm), y = Y(eleAt(dm));
       mkDots.push({ x, y, mk, color:t.color });
       const active = hoverDot && hoverDot.mk === mk;
-      ctx.beginPath(); ctx.arc(x, y, active?7:5.2, 0, 7);
+      const isEdge = t.flag;
+      ctx.beginPath(); ctx.arc(x, y, isEdge?(active?7:5.5):(active?11:9), 0, 7);
       ctx.fillStyle = t.color; ctx.fill();
       ctx.lineWidth = active?3:2; ctx.strokeStyle = "#fff"; ctx.stroke();
+      if (!isEdge){
+        ctx.fillStyle = "#fff"; ctx.font = "800 9px "+cs.getPropertyValue("--font");
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(String(markerIndex+1), x, y+.5);
+      }
     }
 
     // hover crosshair
@@ -537,11 +576,12 @@
     if (!plot) return;
     overlay.innerHTML = "";
     const sorted = [...markers].sort((a,b)=>a.d-b.d);
-    for (const mk of sorted){
+    for (let markerIndex=0; markerIndex<sorted.length; markerIndex++){
+      const mk = sorted[markerIndex];
       const t = TYPES[mk.type] || TYPES.point;
       const x = plot.Xm(mk.d);
       const el = document.createElement("div");
-      el.className = "flag";
+      el.className = "flag "+(t.flag?"edge":"poi");
       el.style.left = x+"px";
       el.style.top = "0px";
       el.style.height = (plot.y+plot.h)+"px";
@@ -549,9 +589,9 @@
       if (mk.note) inner += `<div class="note">${escapeHTML(mk.note)}</div>`;
       const pinContent = t.flag
         ? `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M7 21V4"/><path d="M7 5h9l-2 3 2 3H7"/></svg>`
-        : (t.icon ? iconSVG(t.icon) : escapeHTML(mk.badge || t.badge || ""));
+        : String(markerIndex+1);
       inner += `<div class="pin" style="background:${t.color}">${pinContent}</div>`;
-      inner += `<div class="name">${escapeHTML(mk.name)}</div>`;
+      if (t.flag) inner += `<div class="name">${escapeHTML(mk.name)}</div>`;
       el.innerHTML = inner;
       overlay.appendChild(el);
     }
@@ -582,16 +622,16 @@
     const sorted = [...markers].sort((a,b)=>a.d-b.d);
     if (!sorted.length){ list.innerHTML = `<div class="mk-empty">Sin puntos. Haz clic en el perfil o pulsa “Añadir punto”.</div>`; return; }
     const maxKm = profile[profile.length-1].d/1000;
-    list.innerHTML = sorted.map(mk=>{
+    list.innerHTML = sorted.map((mk,index)=>{
       const t = TYPES[mk.type]||TYPES.point;
       const km = (mk.d/1000).toFixed(1);
       const opts = Object.entries(TYPES).map(([k,v])=>
         `<option value="${k}" ${k===mk.type?"selected":""}>${v.es}</option>`).join("");
       return `<div class="mk-row" data-id="${mk.id}">
-        <span class="sw" style="background:${t.color}"></span>
-        <input type="text" class="mk-name" value="${escapeHTML(mk.name)}" placeholder="Nombre">
-        <select class="mk-type">${opts}</select>
-        <input type="number" class="mk-dist" value="${km}" min="0" max="${maxKm.toFixed(1)}" step="0.1" title="km">
+        <span class="sw" style="background:${t.color}" title="Punto ${index+1}">${index+1}</span>
+        <label class="mk-field mk-name-field"><span>Acción</span><input type="text" class="mk-name" value="${escapeHTML(mk.name)}" placeholder="Nombre"></label>
+        <label class="mk-field mk-type-field"><span>Tipo</span><select class="mk-type">${opts}</select></label>
+        <label class="mk-field mk-dist-field"><span>Kilómetro</span><input type="number" class="mk-dist" value="${km}" min="0" max="${maxKm.toFixed(1)}" step="0.1" title="km"></label>
         <button class="del" title="Eliminar" aria-label="Eliminar">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>
         </button>
@@ -606,7 +646,7 @@
       row.querySelector(".mk-dist").addEventListener("change", e=>{
         let km = parseFloat(e.target.value); if(!isFinite(km)) km=0;
         km = Math.max(0, Math.min(km, maxKm));
-        mk.d = km*1000; draw();
+        mk.d = km*1000; draw(); renderMkList();
       });
       row.querySelector(".del").addEventListener("click", ()=>{ markers=markers.filter(m=>m.id!==id); draw(); renderMkList(); });
     });
@@ -615,7 +655,7 @@
   let mkSeq = 1;
   function addMarker(meters, type="point", name){
     markers.push({ id:mkSeq++, d:meters, type, name: name || (type==="start"?"Salida":type==="finish"?"Meta":"Punto "+mkSeq) });
-    renderFlags(); renderMkList();
+    draw(); renderMkList();
   }
 
   // ---------- exports ----------
