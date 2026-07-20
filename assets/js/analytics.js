@@ -20,7 +20,8 @@
   const POSTHOG_KEY  = "phc_zUzbBZJ43BVm9ERGpqxXkh7WSdmi6v49zEZjS27Mv5FN";
   const POSTHOG_HOST = "https://us.i.posthog.com";   // UE: https://eu.i.posthog.com
 
-  const keyListo = POSTHOG_KEY && POSTHOG_KEY.indexOf("phc_zUzbBZJ43BVm9ERGpqxXkh7WSdmi6v49zEZjS27Mv5FN") !== 0;
+  // válida = empieza con "phc_" y no es el placeholder
+  const keyListo = /^phc_[A-Za-z0-9]{20,}$/.test(POSTHOG_KEY) && POSTHOG_KEY.indexOf("REEMPLAZA") === -1;
 
   if (keyListo && window.posthog && typeof window.posthog.init === "function") {
     window.posthog.init(POSTHOG_KEY, {
