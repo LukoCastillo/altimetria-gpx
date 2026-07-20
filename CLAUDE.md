@@ -11,6 +11,7 @@ are never uploaded to a server.
 
 ## Structure
 
+
 ```
 index.html   # Homepage "Cumbre": hero + race/distance picker + GPX upload
 visor.html   # The viewer: parses a GPX and draws the profile (HTML+CSS+JS in one file)
