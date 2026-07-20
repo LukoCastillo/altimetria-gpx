@@ -11,28 +11,35 @@ are never uploaded to a server.
 
 ## Structure
 
-
 ```
-index.html   # Homepage "Cumbre": hero + race/distance picker + GPX upload
-visor.html   # The viewer: parses a GPX and draws the profile (HTML+CSS+JS in one file)
-vercel.json  # Static-site deploy config (cleanUrls, no build)
-*.gpx        # Official Ultra Coahuila 2026 tracks bundled with the site
+index.html            # Homepage "Cumbre": hero + race/distance picker + GPX upload
+visor.html             # The viewer: parses a GPX and draws the profile
+assets/
+  css/index.css, visor.css   # 1:1 with each page — no shared stylesheet
+  js/index.js, visor.js      # 1:1 with each page — no shared script
+data/
+  *.gpx                       # Official Ultra Coahuila 2026 tracks bundled with the site
+vercel.json            # Static-site deploy config (cleanUrls, security headers)
 ```
 
-Each page is a **single self-contained file** — HTML, CSS (`<style>`), and JS
-(`<script>`) all inline. There is no shared JS/CSS. Keep it that way unless there's a
-strong reason; match the existing inline style rather than introducing a bundler.
+Both HTML pages live at the **root** (not in a subfolder) — Vercel's `cleanUrls` and the
+relative `href`/`src`/`fetch()` paths between them assume that. `assets/` and `data/` are
+the only subfolders; don't nest the HTML entry points.
+
+No build step, no framework, no bundler, no npm deps. CSS/JS live in their own files (not
+inline) so the CSP can forbid inline scripts — **keep JS in the `.js` files, not inline
+`<script>`/`onclick=`**, or the strict `script-src 'self'` (see `vercel.json`) will block it.
 
 ## Page hand-off (how the two pages talk)
 
 The homepage sends the user to the viewer without a backend:
 
-- **Catalog race** → `visor.html?ruta=<file>.gpx&carrera=<n>&distancia=<n>`. The viewer
-  `fetch()`s the GPX by relative path. `carrera`/`distancia` only override the display title.
+- **Catalog race** → `visor.html?ruta=data/<file>.gpx&carrera=<n>&distancia=<n>`. The viewer
+  `fetch()`s the GPX by that relative path. `carrera`/`distancia` only override the display title.
 - **Uploaded GPX** → the file text is put in `sessionStorage` (`cumbre_gpx_text`,
   `cumbre_gpx_name`) and the viewer opens with `?fuente=upload`, then reads and clears it.
 
-The `autoload()` IIFE at the bottom of `visor.html` reads `location.search` and drives this.
+The `autoload()` IIFE at the bottom of `visor.js` reads `location.search` and drives this.
 
 ## Conventions & gotchas
 
@@ -43,13 +50,16 @@ The `autoload()` IIFE at the bottom of `visor.html` reads `location.search` and 
   (`--area-top`, `--area-mid`, `--area-bot`, `--ridge`) and are kept in sync between both files.
 - **Never use `var(--x)` inside raw SVG presentation attributes** (`stop-color`, `stroke`,
   `fill`). It's cross-browser unreliable — use literal hex values in inline SVG.
-- The bundled catalog GPX files contain **zero `<wpt>` waypoints**, so a catalog route
-  shows only Salida/Meta flags. Users can add points of interest manually in the viewer.
+- The bundled catalog GPX files (in `data/`) contain **zero `<wpt>` waypoints**, so a catalog
+  route shows only Salida/Meta flags. Users can add points of interest manually in the viewer.
 - **The homepage picker only lists the races it explicitly declares.** It currently links
-  all four bundled tracks (30k, 50k, 80k, 100 millas). Adding a `.gpx` to the folder does
-  **not** surface it — add a `.dist-btn` with matching `data-ruta`/`data-carrera`/`data-distancia`
-  in `index.html`. Stat numbers (distance, D+) must be computed with the viewer's method
-  (Haversine + 1.5 m hysteresis threshold), not a naive elevation sum.
+  all four bundled tracks (30k, 50k, 80k, 100 millas). Adding a `.gpx` to `data/` does
+  **not** surface it — add a `.dist-btn` with matching `data-ruta="data/<file>.gpx"`,
+  `data-carrera`, `data-distancia` in `index.html`. Stat numbers (distance, D+) must be
+  computed with the viewer's method (Haversine + 1.5 m hysteresis threshold), not a naive
+  elevation sum. **Also add the exact `data/<file>.gpx` path to the `CATALOGO` allowlist in
+  `assets/js/visor.js`** — the viewer only `fetch()`es `?ruta=` values on that list (security:
+  blocks arbitrary/remote URLs); a race missing from it fails with "Ruta de carrera no reconocida".
 - **Day / start time / cutoff shown on race rows are NOT in the GPX files** — they come from
   external race info. Don't fabricate them; the 50k/80k rows omit that line until provided.
 

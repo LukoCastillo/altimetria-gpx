@@ -1,9 +1,10 @@
-# Visor de Altimetría · Perfil GPX
+# Cumbre · Visor de Altimetría GPX
 
-Web app estática (sin build, sin dependencias) que genera un **perfil de altimetría y distancia** a partir de un archivo **GPX**. Dibuja la montaña con tonos terrosos, coloca los **waypoints** del recorrido como banderas y muestra estadísticas del track. Todo se procesa en el navegador: **no se sube ningún archivo a ningún servidor**.
+Web app estática (sin build, sin dependencias) que convierte el **GPX** de una carrera de trail en su **perfil de altimetría y distancia**, como punto de partida de una estrategia de nutrición e hidratación. Dibuja la montaña con tonos terrosos, coloca los **waypoints** del recorrido como banderas y muestra estadísticas del track. Todo se procesa en el navegador: **no se sube ningún archivo a ningún servidor**.
 
 ## Características
 
+- Homepage con selector de carrera/distancia (catálogo Ultra Coahuila 2026) o carga de un GPX propio.
 - Importa GPX (botón o arrastrar y soltar). Lee tracks (`<trkpt>`), rutas (`<rtept>`) y waypoints (`<wpt>`).
 - Calcula distancia (Haversine), desnivel positivo/negativo y altitud mín./máx.
 - Coloca los waypoints por kilómetro (detectado del nombre `KMxx`) o por cercanía al track.
@@ -15,11 +16,18 @@ Web app estática (sin build, sin dependencias) que genera un **perfil de altime
 
 ```
 altimetria-gpx/
-├── index.html      # toda la app (HTML + CSS + JS en un archivo)
-├── vercel.json     # configuración de despliegue (sitio estático)
+├── index.html          # Homepage: hero + selector de carrera/distancia + subir GPX
+├── visor.html           # Visor: perfil de altimetría desde un GPX
+├── assets/
+│   ├── css/              # index.css, visor.css
+│   └── js/                # index.js, visor.js
+├── data/                 # Tracks GPX oficiales de Ultra Coahuila 2026 (30K, 50K, 80K, 100 Millas)
+├── vercel.json          # Configuración de despliegue (sitio estático, cabeceras de seguridad)
 ├── .gitignore
 └── README.md
 ```
+
+Cada página HTML enlaza su propio CSS/JS (sin bundler, sin dependencias). El **CSP** en `vercel.json` exige que el JS viva en archivos `.js` (no scripts inline) — ver `CLAUDE.md` para detalles.
 
 ## Probar en local
 
