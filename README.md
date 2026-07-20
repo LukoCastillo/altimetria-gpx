@@ -105,3 +105,5 @@ Los *pageviews* son automáticos. Eventos personalizados (embudo adquisición �
 | `export_gpx` / `export_pdf` | descarga el recorrido/altimetría (**valor**) | `puntos` |
 
 Embudo a vigilar: `pageview → race_selected/gpx_uploaded → profile_rendered → (marker_added | export_*)`.
+
+
