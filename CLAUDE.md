@@ -71,7 +71,7 @@ The `autoload()` IIFE at the bottom of `visor.js` reads `location.search` and dr
   real Project API key or nothing is sent. Configured with no cookies / no autocapture / no session
   recording. **Only send categories/buckets, never GPX content** (no coordinates, personal filenames,
   or waypoint names/notes). Events wired: `race_selected`, `gpx_uploaded`, `profile_rendered`,
-  `profile_load_failed`, `marker_added`, `export_gpx`, `export_tcx`, `export_pdf`. Pageviews are automatic. PostHog
+  `profile_load_failed`, `marker_added`, `export_gpx`, `export_pdf`. Pageviews are automatic. PostHog
   is an external script, so its domains are in the `vercel.json` CSP (`script-src`/`connect-src`). To
   swap providers, change only `analytics.js`, the `<script>` tag, and the CSP domains.
 

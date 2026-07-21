@@ -481,71 +481,6 @@
     }catch(err){ alert("No se pudo crear el GPX:\n"+err.message); }
   }
 
-  // La app móvil de Garmin Connect NO convierte los <wpt> de un GPX en course points
-  // (solo la web lo hace). El TCX sí: lleva el track con DistanceMeters y <CoursePoint>
-  // reales, que alimentan la vista "Up Ahead" del reloj. Ver plan/al-momento-de-descargar.
-  function buildTCXWithMarkers(){
-    if (!profile.length || !sourceRaw.length) throw new Error("No hay recorrido cargado.");
-    const NS = "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2";
-    const base = Date.UTC(2020, 0, 1);   // epoch sintético; el tiempo solo debe crecer.
-    const isoAt = idx => new Date(base + Math.round(idx*1000)).toISOString().replace(/\.\d{3}Z$/, "Z");
-    const N = profile.length, end = profile[N-1].d;
-    // Índice fraccional para una distancia dada (misma búsqueda binaria que trackPositionAt).
-    const fracIndexAt = meters => {
-      const d = Math.max(0, Math.min(meters, end));
-      if (d <= 0) return 0;
-      if (d >= end) return N-1;
-      let lo=0, hi=N-1;
-      while (hi-lo>1){ const mid=(lo+hi)>>1; if(profile[mid].d<d) lo=mid; else hi=mid; }
-      const span = profile[hi].d - profile[lo].d;
-      return span ? lo + (d-profile[lo].d)/span : lo;
-    };
-    // PointType del esquema TCX (enum cerrado: Generic/Summit/Water/Food/… no admite aid_station).
-    const PT = { food:"Food", meal:"Food", gel:"Food", water:"Water", drink:"Water",
-      summit:"Summit", start:"Generic", finish:"Generic", point:"Generic" };
-    const esc = s => String(s).replace(/[<>&'"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;',"'":'&apos;','"':'&quot;'}[c]));
-    const num = (v,p) => (isFinite(v)?v:0).toFixed(p);
-
-    const courseName = (($("#trackName").textContent||"").trim() || "Recorrido").slice(0,60);
-    let trk = "";
-    for (let i=0;i<N;i++){
-      trk += `<Trackpoint><Time>${isoAt(i)}</Time>`+
-        `<Position><LatitudeDegrees>${num(sourceRaw[i].lat,7)}</LatitudeDegrees>`+
-        `<LongitudeDegrees>${num(sourceRaw[i].lon,7)}</LongitudeDegrees></Position>`+
-        `<AltitudeMeters>${num(profile[i].e,1)}</AltitudeMeters>`+
-        `<DistanceMeters>${num(profile[i].d,1)}</DistanceMeters></Trackpoint>`;
-    }
-    const cpts = [...markers].sort((a,b)=>a.d-b.d).map(mk=>{
-      const pos = trackPositionAt(mk.d);
-      const name = (mk.name || TYPES[mk.type]?.es || "Punto").slice(0,60);
-      const notes = `Km ${(mk.d/1000).toFixed(2)} · ${TYPES[mk.type]?.es || "Punto"}`;
-      return `<CoursePoint><Name>${esc(name)}</Name>`+
-        `<Time>${isoAt(fracIndexAt(mk.d))}</Time>`+
-        `<Position><LatitudeDegrees>${num(pos.lat,7)}</LatitudeDegrees>`+
-        `<LongitudeDegrees>${num(pos.lon,7)}</LongitudeDegrees></Position>`+
-        `<PointType>${PT[mk.type] || "Generic"}</PointType>`+
-        `<Notes>${esc(notes)}</Notes></CoursePoint>`;
-    }).join("");
-
-    return `<?xml version="1.0" encoding="UTF-8"?>\n`+
-      `<TrainingCenterDatabase xmlns="${NS}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" `+
-      `xsi:schemaLocation="${NS} http://www.garmin.com/xmlschemas/TrainingCenterDatabasev2.xsd">`+
-      `<Courses><Course><Name>${esc(courseName)}</Name>`+
-      `<Lap><TotalTimeSeconds>${N-1}</TotalTimeSeconds><DistanceMeters>${num(end,1)}</DistanceMeters>`+
-      `<BeginPosition><LatitudeDegrees>${num(sourceRaw[0].lat,7)}</LatitudeDegrees><LongitudeDegrees>${num(sourceRaw[0].lon,7)}</LongitudeDegrees></BeginPosition>`+
-      `<EndPosition><LatitudeDegrees>${num(sourceRaw[N-1].lat,7)}</LatitudeDegrees><LongitudeDegrees>${num(sourceRaw[N-1].lon,7)}</LongitudeDegrees></EndPosition>`+
-      `<Intensity>Active</Intensity></Lap>`+
-      `<Track>${trk}</Track>${cpts}</Course></Courses></TrainingCenterDatabase>`;
-  }
-
-  function exportTCX(){
-    try{
-      const xml = buildTCXWithMarkers();
-      downloadBlob(new Blob([xml], {type:"application/vnd.garmin.tcx+xml;charset=utf-8"}), safeBaseName(sourceFileName)+"-garmin.tcx");
-      window.cumbreTrack?.("export_tcx", { puntos: markers.length });
-    }catch(err){ alert("No se pudo crear el TCX:\n"+err.message); }
-  }
-
   function makeExportChart(){
     const out = document.createElement("canvas"), w=1400, h=650;
     out.width=w; out.height=h;
@@ -849,18 +784,7 @@
   $("#importBtn").addEventListener("click", ()=>$("#fileInput").click());
   $("#fileInput").addEventListener("change", e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); e.target.value=""; });
   $("#addMk").addEventListener("click", ()=> addMarker(profile[profile.length-1].d*0.5, "point", undefined, "boton"));
-  // Menú compacto de exportación: evita saturar el encabezado en pantallas pequeñas.
-  const dlTrigger = $("#downloadMenuBtn"), dlPop = $("#downloadPop");
-  const closeDlMenu = ()=>{ dlPop.classList.add("hidden"); dlTrigger.setAttribute("aria-expanded","false"); };
-  const toggleDlMenu = ()=>{
-    const open = dlPop.classList.toggle("hidden");
-    dlTrigger.setAttribute("aria-expanded", open ? "false" : "true");
-  };
-  dlTrigger.addEventListener("click", e=>{ e.stopPropagation(); toggleDlMenu(); });
-  document.addEventListener("click", e=>{ if(!e.target.closest(".dl-menu")) closeDlMenu(); });
-  document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeDlMenu(); });
-  $("#downloadGpx").addEventListener("click", ()=>{ closeDlMenu(); exportGPX(); });
-  $("#downloadTcx").addEventListener("click", ()=>{ closeDlMenu(); exportTCX(); });
+  $("#downloadGpx").addEventListener("click", exportGPX);
   $("#downloadPdf").addEventListener("click", exportPDF);
 
   const drop = $("#drop");
