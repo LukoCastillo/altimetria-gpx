@@ -42,10 +42,22 @@
     </a>
     <div class="head-actions">
       <div id="exportActions" class="export-actions hidden">
-        <button id="downloadGpx" class="btn" title="Descargar el recorrido con todos los puntos de interés">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 19h16"/></svg>
-          Descargar GPX
-        </button>
+        <div class="dl-menu">
+          <button id="downloadMenuBtn" class="btn dl-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="downloadPop">
+            Descargar
+            <svg class="dl-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div id="downloadPop" class="dl-pop hidden" role="menu">
+            <button id="downloadGpx" class="dl-opt" role="menuitem">
+              <span class="dl-opt-t">GPX universal</span>
+              <span class="dl-opt-s">Compatible con otras herramientas</span>
+            </button>
+            <button id="downloadTcx" class="dl-opt" role="menuitem">
+              <span class="dl-opt-t">TCX · App Garmin Connect</span>
+              <span class="dl-opt-s">Con puntos de trayecto</span>
+            </button>
+          </div>
+        </div>
         <button id="downloadPdf" class="btn" title="Descargar la altimetría y la tabla de acciones">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l4 4v16H6z"/><path d="M14 2v5h5M9 13h6M9 17h6"/></svg>
           Descargar PDF
