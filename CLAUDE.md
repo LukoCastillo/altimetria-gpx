@@ -53,7 +53,7 @@ The `autoload()` IIFE at the bottom of `visor.js` reads `location.search` and dr
 - The bundled catalog GPX files (in `data/`) contain **zero `<wpt>` waypoints**, so a catalog
   route shows only Salida/Meta flags. Users can add points of interest manually in the viewer.
 - **The homepage picker only lists the races it explicitly declares.** It currently links
-  all four bundled tracks (30k, 50k, 80k, 100 millas). Adding a `.gpx` to `data/` does
+  all six bundled tracks (12k, 30k, 50k, 80k, 100k, 100 millas). Adding a `.gpx` to `data/` does
   **not** surface it — add a `.dist-btn` with matching `data-ruta="data/<file>.gpx"`,
   `data-carrera`, `data-distancia` in `index.html`. Stat numbers (distance, D+) must be
   computed with the viewer's method (Haversine + 1.5 m hysteresis threshold), not a naive
@@ -61,7 +61,9 @@ The `autoload()` IIFE at the bottom of `visor.js` reads `location.search` and dr
   `assets/js/visor.js`** — the viewer only `fetch()`es `?ruta=` values on that list (security:
   blocks arbitrary/remote URLs); a race missing from it fails with "Ruta de carrera no reconocida".
 - **Day / start time / cutoff shown on race rows are NOT in the GPX files** — they come from
-  external race info. Don't fabricate them; the 50k/80k rows omit that line until provided.
+  external race info. Don't fabricate them. The current Ultra Coahuila 2026 schedule comes from
+  `https://www.ultracoahuila.com/ultra/index.php/distancias`; GPX-derived distance and D+ remain
+  calculated with the viewer's method even when the official site publishes different figures.
 - **Analytics = privacy-safe, swappable.** All tracking goes through `window.cumbreTrack(name, data)`
   in `assets/js/analytics.js` (currently **PostHog** — free tier has custom events + funnels; note
   Vercel Web Analytics does NOT support custom events on its free Hobby plan, which is why we moved).

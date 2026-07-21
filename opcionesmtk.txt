@@ -1,3 +1,50 @@
 Cumbre procesa tu GPX para darte el terreno; tú defines la estrategia. Diseña tu plan de nutrición basándote en el desnivel real de la ruta y exporta tu configuración a las plataformas que ya usas para entrenar."
 
 Tú diseñas tu estrategia de nutrición e hidratación. Cumbre convierte tu GPX en un perfil de altimetría claro para que decidas cuándo comer, cuándo beber y cuánto peso cargar en cada tramo — y lo exportes listo para el día de carrera.
+
+
+¡Qué onda, banda corredora! 🏃‍♂️⛰️
+
+Preparando mi estrategia de carrera para el Ultra Coahuila me di cuenta que la pagina de Garmin no era tan amigable, así que hice una herramienta para hacerlo más fácil y poder exportarlo a Garmin u otros dispositivos. Se llama Cumbre.
+
+Ayuda a visualizar y preparar recorridos de trail a partir de archivos GPX, te permite:
+Ver el perfil de altimetría y las estadísticas del recorrido.
+Agregar puntos de abasto, agua, comida, geles, etc.
+Indicar en que kilometro lo vas a consumir.
+Descargar el recorrido actualizado en GPX, listo para utilizar en cualquier dispositivo. (Tambien puedes generar un PDF con la altimetría y tu planificación.)
+
+Si las subes en tu dispositivo podrás tener alarmas durante tu carrera para recordarte tu estrategía.
+
+La herramienta es gratuita y me pueden dejar comentarios para seguirla mejorando. #trailrunning #comunidad 
+
+👇Aqui les dejo un video de como utilizarla👇
+Pruébenla aquí: 
+
+¡Gracias y buenas vibras en sus rutas! 🤜🤛
+
+
+
+
+
+
+
+¡Qué onda, banda corredora! 🏃‍♂️⛰️
+
+Ya afinando los últimos detalles para la carrera? 
+Les comparto una herramienta que hice para preparar mi estrategia del  Ultra Coahuila, ya que me di cuenta que la pagina de Garmin no era tan amigable, con esta herramienta pueden hacer su plan y exportarlo a Garmin u otros dispositivos. Se llama Cumbre.
+
+Ayuda a visualizar y preparar recorridos de trail a partir de archivos GPX, te permite:
+Ver el perfil de altimetría y las estadísticas del recorrido.
+Agregar puntos de abasto, agua, comida, geles, etc.
+Indicar en que kilometro lo vas a consumir.
+Descargar el recorrido actualizado en GPX, listo para utilizar en cualquier dispositivo. (Tambien puedes generar un PDF con la altimetría y tu planificación.)
+
+Si las subes en tu dispositivo podrás tener alarmas durante tu carrera para recordarte tu estrategia.
+
+La herramienta es gratuita y me pueden dejar comentarios para seguirla mejorando. #trailrunning #comunidad 
+
+👇 Aqui les dejo un video de como utilizarla👇
+Pruébenla aquí:  https://cumbre-five.vercel.app/
+
+
+¡Gracias y buenas vibras en sus rutas! 🤜🤛

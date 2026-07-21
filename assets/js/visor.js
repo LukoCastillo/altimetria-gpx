@@ -798,9 +798,11 @@
   // ---------- autoload desde Cumbre (carrera del catálogo o GPX subido en el inicio) ----------
   // Solo se permiten los GPX del catálogo incluidos en el sitio (evita cargar URLs arbitrarias / phishing).
   const CATALOGO = new Set([
+    "data/ultra-coah-campeonato-continental-de-las-americas-2026-12k-ultra-coah-2026.gpx",
     "data/ultra-coah-campeonato-continental-de-las-americas-2026-30k-ultra-coah-2026.gpx",
     "data/ultra-coah-campeonato-continental-de-las-americas-2026-50k-ultra-coah-2026.gpx",
     "data/ultra-coah-campeonato-continental-de-las-americas-2026-80k-ultra-coah-2026.gpx",
+    "data/ultra-coah-campeonato-continental-de-las-americas-2026-100k-ultra-coah-2026.gpx",
     "data/ultra-coah-campeonato-continental-de-las-americas-2026-100-millas-ultra-coah-2026-2-0.gpx",
   ]);
 
