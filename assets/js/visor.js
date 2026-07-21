@@ -447,8 +447,10 @@
     // Si el archivo usa <wpt> como única geometría, se conservan para no borrar la ruta.
     if (!sourceUsesWptAsTrack) [...root.children].filter(el=>el.localName==="wpt").forEach(el=>el.remove());
     const firstRoute = [...root.children].find(el=>el.localName==="rte" || el.localName==="trk") || null;
-    const typeMap = { food:"AID_STATION", meal:"FOOD", gel:"ENERGY_GEL", water:"WATER", drink:"SPORTS_DRINK", summit:"SUMMIT",
-      start:"GENERIC", finish:"GENERIC", point:"GENERIC" };
+    // Tipos de course point de FIT en minúsculas snake_case: es la convención (estilo
+    // Ride with GPS) que Garmin Connect convierte de <wpt> a course points sobre el curso.
+    const typeMap = { food:"aid_station", meal:"food", gel:"energy_gel", water:"water", drink:"sports_drink", summit:"summit",
+      start:"generic", finish:"generic", point:"generic" };
     const sorted = [...markers].sort((a,b)=>a.d-b.d);
     for (const mk of sorted){
       const pos = trackPositionAt(mk.d);
@@ -460,7 +462,10 @@
       const desc = doc.createElementNS(ns, "desc");
       desc.textContent = `Km ${(mk.d/1000).toFixed(2)} · ${TYPES[mk.type]?.es || "Punto"}`;
       wpt.appendChild(desc);
-      const type = doc.createElementNS(ns, "type"); type.textContent = typeMap[mk.type] || "GENERIC"; wpt.appendChild(type);
+      const fitType = typeMap[mk.type] || "generic";
+      const type = doc.createElementNS(ns, "type"); type.textContent = fitType; wpt.appendChild(type);
+      // <sym> con el mismo valor: cubre el camino de importación (estilo Gaia GPS) que lee <sym>.
+      const sym = doc.createElementNS(ns, "sym"); sym.textContent = fitType; wpt.appendChild(sym);
       root.insertBefore(wpt, firstRoute);
     }
     const serialized = new XMLSerializer().serializeToString(doc)
