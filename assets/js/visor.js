@@ -19,6 +19,7 @@
   let sourceFileName = "recorrido.gpx";
   let sourceUsesWptAsTrack = false;
   let currentCatalogRoute = null;
+  let coachHideTimer = null;
 
   const handoffPayload = window.__cumbreHandoff || (() => {
     try { return sessionStorage.getItem("cumbre_export_handoff"); }
@@ -412,6 +413,7 @@
   let mkSeq = 1;
   function addMarker(meters, type="point", name, metodo="otro"){
     markers.push({ id:mkSeq++, d:meters, type, name: name || (type==="start"?"Salida":type==="finish"?"Meta":"Punto "+mkSeq) });
+    dismissChartCoach();
     draw(); renderMkList();
     window.cumbreTrack?.("marker_added", { tipo: type, metodo });
   }
@@ -798,6 +800,31 @@
   }
 
   // ---------- load ----------
+  function usesCoarsePointer(){
+    return typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+  }
+
+  function showChartCoach(){
+    const coach = $("#chartCoach");
+    clearTimeout(coachHideTimer);
+    coachHideTimer = null;
+    coach.textContent = `${usesCoarsePointer() ? "Toca" : "Haz clic en"} cualquier punto del perfil para marcar dónde comerás o beberás`;
+    coach.hidden = false;
+    coach.classList.remove("hiding");
+  }
+
+  function dismissChartCoach(){
+    const coach = $("#chartCoach");
+    if (coach.hidden) return;
+    clearTimeout(coachHideTimer);
+    coach.classList.add("hiding");
+    coachHideTimer = setTimeout(()=>{
+      coach.hidden = true;
+      coach.classList.remove("hiding");
+      coachHideTimer = null;
+    }, 220);
+  }
+
   function load(prof, name, mks){
     profile = prof;
     markers = mks || [
@@ -807,12 +834,13 @@
     $("#drop").classList.add("hidden");
     $("#result").classList.remove("hidden");
     $("#exportActions").classList.remove("hidden");
-    $("#viewerSub").textContent = "Haz clic sobre el perfil para añadir un punto";
+    $("#viewerSub").textContent = `${usesCoarsePointer() ? "Toca" : "Haz clic en"} el perfil para añadir un punto`;
     $("#trackName").textContent = name || "Perfil del recorrido";
     const s = stats(prof);
     $("#trackSub").textContent = `${(s.dist/1000).toFixed(1)} km · +${Math.round(s.gain)} m`;
     renderStats(); renderMkList();
     requestAnimationFrame(draw);
+    requestAnimationFrame(showChartCoach);
   }
 
   function loadFromGPXText(text, fallbackName, titleOverride, fileName, markerOverride){

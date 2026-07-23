@@ -77,6 +77,7 @@
       <div class="chart-stage">
         <canvas id="chart"></canvas>
         <div class="overlay" id="overlay"></div>
+        <div class="chart-coach" id="chartCoach" role="status" aria-live="polite" hidden></div>
         <div class="tip" id="tip" role="status" aria-live="polite"></div>
       </div>
     </div>
@@ -85,7 +86,10 @@
 
     <div class="panel">
       <div class="panel-head">
-        <h3>Puntos del trayecto</h3>
+        <div class="panel-title">
+          <h3>Tu estrategia de nutrición e hidratación</h3>
+          <p>Define qué comerás o beberás y en qué kilómetro de la carrera.</p>
+        </div>
         <span class="sp"></span>
         <button id="addMk" class="btn">+ Añadir punto</button>
       </div>

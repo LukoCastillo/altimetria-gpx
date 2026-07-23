@@ -89,6 +89,17 @@
   }
   canvas#chart { display: block; width: 100%; height: 380px; touch-action: pan-y; }
   .overlay { position: absolute; inset: 0; pointer-events: none; }
+  .chart-coach {
+    position: absolute; z-index: 4; top: 12px; left: 50%; transform: translate(-50%, 0);
+    width: max-content; max-width: calc(100% - 32px); padding: 9px 14px;
+    border: 1px solid rgba(108,122,51,.28); border-radius: 999px;
+    background: rgba(255,255,255,.94); color: var(--poster-ink);
+    box-shadow: 0 5px 18px rgba(60,55,35,.14); pointer-events: none;
+    font-size: .78rem; font-weight: 700; line-height: 1.35; text-align: center;
+    opacity: 1; transition: opacity .2s ease, transform .2s ease;
+  }
+  .chart-coach[hidden] { display: none; }
+  .chart-coach.hiding { opacity: 0; transform: translate(-50%, -6px); }
 
   /* flags */
   .flag { position: absolute; transform: translateX(-50%); text-align: center; pointer-events: none; }
@@ -154,7 +165,9 @@
     box-shadow: var(--shadow); margin-top: 18px; overflow: hidden;
   }
   .panel-head { display: flex; align-items: center; gap: 12px; padding: 15px 18px; border-bottom: 1px solid var(--line); }
+  .panel-title { min-width: 0; }
   .panel-head h3 { margin: 0; font-size: .98rem; font-weight: 800; }
+  .panel-title p { margin: 2px 0 0; color: var(--ink-mute); font-size: .78rem; line-height: 1.4; }
   .panel-head .hint { font-size: .78rem; color: var(--ink-mute); }
   .panel-head .sp { margin-left: auto; }
   .mk-list { display: flex; flex-direction: column; }
@@ -240,6 +253,7 @@
       font-size: .82rem;
     }
     .panel-head { flex-wrap: wrap; }
+    .panel-title { flex: 1 1 calc(100% - 130px); }
     .panel-head .hint { order: 3; width: 100%; }
     .stats { gap: 8px; margin-top: 12px; }
     .stat { padding: 8px 11px; }
@@ -257,4 +271,8 @@
     .mk-row .del { grid-area: del; }
     .mk-field > span:first-child { white-space: normal; line-height: 1.15; }
     canvas#chart { height: 280px; }
+    .chart-coach {
+      top: 9px; width: calc(100% - 24px); max-width: 390px;
+      padding: 8px 12px; border-radius: 11px; font-size: .73rem;
+    }
   }
