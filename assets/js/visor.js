@@ -20,6 +20,10 @@
   let sourceUsesWptAsTrack = false;
   let currentCatalogRoute = null;
   let coachHideTimer = null;
+  let markerToastTimer = null;
+  let markerToastHideTimer = null;
+  let markerHighlightTimer = null;
+  let highlightedMarkerRow = null;
 
   const handoffPayload = window.__cumbreHandoff || (() => {
     try { return sessionStorage.getItem("cumbre_export_handoff"); }
@@ -354,7 +358,15 @@
     const sorted = [...markers].sort((a,b)=>a.d-b.d);
     if (!sorted.length){ list.innerHTML = `<div class="mk-empty">Sin puntos. Haz clic en el perfil o pulsa “Añadir punto”.</div>`; return; }
     const maxKm = profile[profile.length-1].d/1000;
-    list.innerHTML = sorted.map((mk,index)=>{
+    const hasStrategyPoints = markers.some(mk=>!(TYPES[mk.type]||TYPES.point).flag);
+    const guideAction = usesCoarsePointer()
+      ? "Toca cualquier punto del perfil"
+      : "Haz clic en cualquier punto del perfil";
+    const emptyGuide = hasStrategyPoints ? "" : `
+      <div class="mk-guide" role="status">
+        <p><strong>Aún no tienes puntos de abasto.</strong> ${guideAction} o usa <b>+ Añadir punto</b>.</p>
+      </div>`;
+    list.innerHTML = emptyGuide + sorted.map((mk,index)=>{
       const t = TYPES[mk.type]||TYPES.point;
       const km = (mk.d/1000).toFixed(1);
       const opts = TYPE_ORDER.map(k=>
@@ -410,12 +422,57 @@
     });
   }
 
+  function openAddedMarkerEditor(markerId){
+    const row = $("#mkList").querySelector(`.mk-row[data-id="${markerId}"]`);
+    if (!row) return;
+
+    clearTimeout(markerHighlightTimer);
+    highlightedMarkerRow?.classList.remove("just-added");
+    highlightedMarkerRow = row;
+    row.classList.add("just-added");
+
+    const nameInput = row.querySelector(".mk-name");
+    try { nameInput.focus({preventScroll:true}); }
+    catch (_) { nameInput.focus(); }
+    nameInput.select();
+    requestAnimationFrame(()=>{
+      row.scrollIntoView({
+        behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: usesCoarsePointer() ? "center" : "nearest",
+      });
+    });
+
+    markerHighlightTimer = setTimeout(()=>{
+      row.classList.remove("just-added");
+      if (highlightedMarkerRow === row) highlightedMarkerRow = null;
+    }, 3000);
+
+    const toast = $("#markerToast");
+    clearTimeout(markerToastTimer);
+    clearTimeout(markerToastHideTimer);
+    toast.hidden = false;
+    toast.classList.remove("hiding");
+    markerToastTimer = setTimeout(()=>{
+      toast.classList.add("hiding");
+      markerToastHideTimer = setTimeout(()=>{
+        toast.hidden = true;
+        toast.classList.remove("hiding");
+        markerToastHideTimer = null;
+      }, 220);
+      markerToastTimer = null;
+    }, 3200);
+  }
+
   let mkSeq = 1;
-  function addMarker(meters, type="point", name, metodo="otro"){
-    markers.push({ id:mkSeq++, d:meters, type, name: name || (type==="start"?"Salida":type==="finish"?"Meta":"Punto "+mkSeq) });
+  function addMarker(meters, type="water", name, metodo="otro"){
+    const defaultName = type==="start" ? "Salida" : type==="finish" ? "Meta" : TYPES[type]?.es || "Punto";
+    const marker = { id:mkSeq++, d:meters, type, name:name || defaultName };
+    markers.push(marker);
     dismissChartCoach();
     draw(); renderMkList();
+    if (metodo === "click_perfil" || metodo === "tooltip") openAddedMarkerEditor(marker.id);
     window.cumbreTrack?.("marker_added", { tipo: type, metodo });
+    return marker;
   }
 
   // ---------- exports ----------
@@ -966,7 +1023,7 @@
     }
     if (mkDots.some(d=>Math.hypot(d.x-x, d.y-y)<15)) return; // ya hay un punto aquí
     const km = Math.max(0, Math.min(((x-plot.x)/plot.w)*plot.distKm, plot.distKm));
-    addMarker(km*1000, "point", "Punto "+(markers.length+1), "click_perfil");
+    addMarker(km*1000, "water", undefined, "click_perfil");
   });
 
   tip.addEventListener("click", e=>{
@@ -976,7 +1033,7 @@
     const meters = parseFloat(btn.dataset.meters);
     if (!isFinite(meters)) return;
     touchLocked=false; tip.classList.remove("locked"); tip.style.opacity=0;
-    addMarker(meters, "point", "Punto "+(markers.length+1), "tooltip");
+    addMarker(meters, "water", undefined, "tooltip");
   });
   document.addEventListener("pointerdown", e=>{
     if (touchLocked && e.pointerType==="touch" && !e.target.closest(".chart-stage")) clearTouchInspect();
@@ -985,7 +1042,7 @@
   // ---------- wiring ----------
   $("#importBtn").addEventListener("click", ()=>$("#fileInput").click());
   $("#fileInput").addEventListener("change", e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); e.target.value=""; });
-  $("#addMk").addEventListener("click", ()=> addMarker(profile[profile.length-1].d*0.5, "point", undefined, "boton"));
+  $("#addMk").addEventListener("click", ()=> addMarker(profile[profile.length-1].d*0.5, "water", undefined, "boton"));
   $("#downloadGpx").addEventListener("click", exportGPX);
   $("#downloadPdf").addEventListener("click", exportPDF);
 
