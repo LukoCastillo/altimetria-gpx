@@ -23,6 +23,7 @@
   let markerToastTimer = null;
   let markerToastHideTimer = null;
   let markerHighlightTimer = null;
+  let markerScrollTimer = null;
   let highlightedMarkerRow = null;
 
   const handoffPayload = window.__cumbreHandoff || (() => {
@@ -435,12 +436,20 @@
     try { nameInput.focus({preventScroll:true}); }
     catch (_) { nameInput.focus(); }
     nameInput.select();
-    requestAnimationFrame(()=>{
+    clearTimeout(markerScrollTimer);
+    const reducedMotion = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const scrollToEditor = ()=>{
       row.scrollIntoView({
-        behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        behavior: reducedMotion ? "auto" : "smooth",
         block: usesCoarsePointer() ? "center" : "nearest",
       });
-    });
+      markerScrollTimer = null;
+    };
+    if (usesCoarsePointer() && !reducedMotion){
+      markerScrollTimer = setTimeout(scrollToEditor, 280);
+    } else {
+      requestAnimationFrame(scrollToEditor);
+    }
 
     markerHighlightTimer = setTimeout(()=>{
       row.classList.remove("just-added");

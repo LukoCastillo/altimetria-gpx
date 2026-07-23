@@ -290,6 +290,9 @@
     .mk-name-field { grid-area: name; }
     .mk-type-field { grid-area: type; }
     .mk-dist-field { grid-area: dist; }
+    .mk-row input[type=text], .mk-row select, .mk-row input[type=number] {
+      font-size: 16px;
+    }
     .mk-row .del { grid-area: del; }
     .mk-field > span:first-child { white-space: normal; line-height: 1.15; }
     canvas#chart { height: 280px; }
