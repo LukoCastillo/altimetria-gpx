@@ -18,6 +18,14 @@
   let sourceRaw = [];         // {lat,lon,e}, alineado con profile
   let sourceFileName = "recorrido.gpx";
   let sourceUsesWptAsTrack = false;
+  let currentCatalogRoute = null;
+
+  const handoffPayload = window.__cumbreHandoff || (() => {
+    try { return sessionStorage.getItem("cumbre_export_handoff"); }
+    catch (_) { return null; }
+  })();
+  window.__cumbreHandoff = null;
+  try { sessionStorage.removeItem("cumbre_export_handoff"); } catch (_) {}
 
   const TYPES = {
     food:   { color:"#ef8a2b", es:"Abasto",           icon:"aid"    },
@@ -413,6 +421,94 @@
     return (name || "recorrido").replace(/\.gpx$/i, "").replace(/[\\/:*?"<>|]+/g, "-").trim() || "recorrido";
   }
 
+  function isAndroidInstagram(){
+    const ua = navigator.userAgent || "";
+    return /Android/i.test(ua) && /Instagram/i.test(ua);
+  }
+
+  function encodeHandoff(value){
+    const bytes = new TextEncoder().encode(JSON.stringify(value));
+    let binary = "";
+    for (let i=0; i<bytes.length; i+=8192){
+      binary += String.fromCharCode(...bytes.subarray(i, i+8192));
+    }
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  }
+
+  function decodeHandoff(value){
+    if (!value || value.length > 24000) throw new Error("Transferencia demasiado grande.");
+    const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4-base64.length%4)%4);
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, char=>char.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+
+  function readHandoffState(){
+    if (!handoffPayload) return null;
+    const state = decodeHandoff(handoffPayload);
+    if (
+      !state ||
+      state.v !== 1 ||
+      !["gpx", "pdf"].includes(state.f) ||
+      !Array.isArray(state.m) ||
+      state.m.length < 2 ||
+      state.m.length > 150
+    ) throw new Error("La transferencia a Chrome no es válida.");
+
+    const restored = state.m.map(item=>{
+      if (!Array.isArray(item) || item.length < 3) throw new Error("Punto transferido no válido.");
+      const d = Number(item[0]);
+      const type = TYPE_ORDER.includes(item[1]) ? item[1] : "point";
+      const name = String(item[2] || TYPES[type]?.es || "Punto")
+        .replace(/[\u0000-\u001f\u007f]/g, " ")
+        .trim()
+        .slice(0, 100);
+      if (!isFinite(d)) throw new Error("Distancia transferida no válida.");
+      return {d, type, name:name || TYPES[type]?.es || "Punto"};
+    });
+    return {format:state.f, markers:restored};
+  }
+
+  function buildChromeIntent(format){
+    if (!currentCatalogRoute) return null;
+    if (markers.length > 150) throw new Error("Hay demasiados puntos para transferir a Chrome.");
+
+    const state = {
+      v: 1,
+      f: format,
+      m: markers.map(marker=>[
+        Math.round(marker.d*10)/10,
+        TYPE_ORDER.includes(marker.type) ? marker.type : "point",
+        String(marker.name || TYPES[marker.type]?.es || "Punto").slice(0, 100),
+      ]),
+    };
+    const payload = encodeHandoff(state);
+    if (payload.length > 18000) throw new Error("La estrategia es demasiado grande para transferir a Chrome.");
+
+    const target = new URL(window.location.href);
+    target.searchParams.delete("fuente");
+    target.searchParams.set("ruta", currentCatalogRoute);
+    target.searchParams.set("handoff", payload);
+    const scheme = target.protocol.replace(":", "");
+    const fallback = encodeURIComponent(target.href);
+    return `intent://${target.host}${target.pathname}${target.search}`+
+      `#Intent;scheme=${scheme};package=com.android.chrome;S.browser_fallback_url=${fallback};end`;
+  }
+
+  function handoffExportToChrome(format){
+    if (!isAndroidInstagram() || !currentCatalogRoute) return false;
+    try{
+      const intent = buildChromeIntent(format);
+      if (!intent) return false;
+      window.location.href = intent;
+      return true;
+    }catch(err){
+      alert("No se pudo preparar la descarga en Chrome:\n"+err.message);
+      return true;
+    }
+  }
+
   function downloadBlob(blob, fileName){
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -420,6 +516,24 @@
     a.style.display = "none";
     document.body.appendChild(a); a.click();
     setTimeout(()=>{ a.remove(); URL.revokeObjectURL(url); }, 1500);
+  }
+
+  async function shareBlobIfPossible(blob, fileName){
+    if (
+      !isAndroidInstagram() ||
+      typeof File !== "function" ||
+      typeof navigator.share !== "function" ||
+      typeof navigator.canShare !== "function"
+    ) return false;
+    const file = new File([blob], fileName, {type:blob.type});
+    if (!navigator.canShare({files:[file]})) return false;
+    try{
+      await navigator.share({files:[file]});
+      return true;
+    }catch(err){
+      if (err?.name === "AbortError") return true;
+      throw err;
+    }
   }
 
   function trackPositionAt(meters){
@@ -473,12 +587,37 @@
     return '<?xml version="1.0" encoding="UTF-8"?>\n'+serialized;
   }
 
-  function exportGPX(){
+  function makeGPXExport(){
+    const xml = buildGPXWithMarkers();
+    const fileName = safeBaseName(sourceFileName)+"-con-puntos.gpx";
+    return {
+      blob:new Blob([xml], {type:"application/gpx+xml;charset=utf-8"}),
+      fileName,
+    };
+  }
+
+  function downloadGPXDirect(){
     try{
-      const xml = buildGPXWithMarkers();
-      downloadBlob(new Blob([xml], {type:"application/gpx+xml;charset=utf-8"}), safeBaseName(sourceFileName)+"-con-puntos.gpx");
+      const {blob, fileName} = makeGPXExport();
+      downloadBlob(blob, fileName);
       window.cumbreTrack?.("export_gpx", { puntos: markers.length });
     }catch(err){ alert("No se pudo crear el GPX:\n"+err.message); }
+  }
+
+  async function exportGPX(){
+    if (handoffExportToChrome("gpx")) return;
+    if (isAndroidInstagram() && !currentCatalogRoute){
+      try{
+        const {blob, fileName} = makeGPXExport();
+        if (await shareBlobIfPossible(blob, fileName)){
+          window.cumbreTrack?.("export_gpx", { puntos: markers.length });
+          return;
+        }
+        alert("Instagram no puede guardar este GPX importado. Ábrelo en Chrome y vuelve a importar el archivo.");
+      }catch(err){ alert("No se pudo crear el GPX:\n"+err.message); }
+      return;
+    }
+    downloadGPXDirect();
   }
 
   function makeExportChart(){
@@ -618,18 +757,44 @@
     return new Blob([bytes],{type:"application/pdf"});
   }
 
-  async function exportPDF(){
+  function makePDFExport(){
+    const chart=makeExportChart();
+    const data=chart.toDataURL("image/jpeg",.92).split(",")[1];
+    const jpeg=atob(data);
+    return {
+      blob:buildPDF(jpeg,chart.width,chart.height),
+      fileName:safeBaseName(sourceFileName)+"-altimetria.pdf",
+    };
+  }
+
+  async function downloadPDFDirect(){
     const btn=$("#downloadPdf"), original=btn.innerHTML;
     try{
       btn.disabled=true; btn.textContent="Preparando PDF…";
-      const chart=makeExportChart();
-      const data=chart.toDataURL("image/jpeg",.92).split(",")[1];
-      const jpeg=atob(data);
-      const pdf=buildPDF(jpeg,chart.width,chart.height);
-      downloadBlob(pdf,safeBaseName(sourceFileName)+"-altimetria.pdf");
+      const {blob, fileName}=makePDFExport();
+      downloadBlob(blob,fileName);
       window.cumbreTrack?.("export_pdf", { puntos: markers.length });
     }catch(err){ alert("No se pudo crear el PDF:\n"+err.message); }
     finally{ btn.disabled=false; btn.innerHTML=original; }
+  }
+
+  async function exportPDF(){
+    if (handoffExportToChrome("pdf")) return;
+    if (isAndroidInstagram() && !currentCatalogRoute){
+      const btn=$("#downloadPdf"), original=btn.innerHTML;
+      try{
+        btn.disabled=true; btn.textContent="Preparando PDF…";
+        const {blob, fileName}=makePDFExport();
+        if (await shareBlobIfPossible(blob, fileName)){
+          window.cumbreTrack?.("export_pdf", { puntos: markers.length });
+          return;
+        }
+        alert("Instagram no puede guardar este PDF. Ábrelo en Chrome para descargarlo.");
+      }catch(err){ alert("No se pudo crear el PDF:\n"+err.message); }
+      finally{ btn.disabled=false; btn.innerHTML=original; }
+      return;
+    }
+    await downloadPDFDirect();
   }
 
   // ---------- load ----------
@@ -650,7 +815,7 @@
     requestAnimationFrame(draw);
   }
 
-  function loadFromGPXText(text, fallbackName, titleOverride, fileName){
+  function loadFromGPXText(text, fallbackName, titleOverride, fileName, markerOverride){
     const { raw, name, waypoints, usedWptAsTrack } = parseGPX(text);
     const prof = buildProfile(raw);
     if (prof[prof.length-1].d < 1) throw new Error("El recorrido no tiene distancia (¿coordenadas iguales?).");
@@ -659,13 +824,22 @@
     sourceFileName = fileName || fallbackName || name || "recorrido.gpx";
     sourceUsesWptAsTrack = usedWptAsTrack;
     mkSeq = 1;
-    const mks = markersFromWpts(prof, raw, waypoints);
+    const end = prof[prof.length-1].d;
+    const mks = markerOverride
+      ? markerOverride.map(marker=>({
+          id:mkSeq++,
+          d:Math.max(0, Math.min(Number(marker.d), end)),
+          type:TYPE_ORDER.includes(marker.type) ? marker.type : "point",
+          name:String(marker.name || TYPES[marker.type]?.es || "Punto").slice(0, 100),
+        }))
+      : markersFromWpts(prof, raw, waypoints);
     load(prof, titleOverride || name || fallbackName, mks);
   }
 
   async function handleFile(file){
     try{
       const text = await file.text();
+      currentCatalogRoute = null;
       loadFromGPXText(text, file.name.replace(/\.gpx$/i,""), null, file.name);
       window.cumbreTrack?.("profile_rendered", { fuente: "import_viewer", distancia: "custom" });
     }catch(err){
@@ -824,6 +998,11 @@
     const distancia = params.get("distancia");
     const titulo = (carrera && distancia) ? `${carrera} · ${distancia}` : (carrera || distancia || null);
     const cargandoTxt = titulo ? `Cargando ${titulo}…` : "Cargando recorrido…";
+    let handoffState = null;
+    if (handoffPayload){
+      try { handoffState = readHandoffState(); }
+      catch (_) { handoffState = null; }
+    }
 
     const drop = $("#drop");
     drop.classList.add("loading");
@@ -837,6 +1016,7 @@
 
     try{
       if (fuente === "upload"){
+        currentCatalogRoute = null;
         const text = sessionStorage.getItem("cumbre_gpx_text");
         const name = sessionStorage.getItem("cumbre_gpx_name") || "Recorrido";
         sessionStorage.removeItem("cumbre_gpx_text");
@@ -847,12 +1027,19 @@
         window.cumbreTrack?.("profile_rendered", { fuente: "upload_home", distancia: "custom" });
       } else {
         if (!CATALOGO.has(ruta)) throw new Error("Ruta de carrera no reconocida.");
+        currentCatalogRoute = ruta;
         const res = await fetch(ruta);
         if (!res.ok) throw new Error("No se pudo cargar el recorrido (código "+res.status+").");
         const text = await res.text();
         await yieldToPaint();               // que el spinner se vea durante el parseo del GPX (p. ej. 80K)
-        loadFromGPXText(text, null, titulo, ruta.split("/").pop());
+        loadFromGPXText(text, null, titulo, ruta.split("/").pop(), handoffState?.markers);
         window.cumbreTrack?.("profile_rendered", { fuente: "catalog", distancia: distancia || "?" });
+        if (handoffState){
+          await yieldToPaint();
+          $("#viewerSub").textContent = "Descarga automática iniciada en Chrome";
+          if (handoffState.format === "pdf") await downloadPDFDirect();
+          else downloadGPXDirect();
+        }
       }
     }catch(err){
       window.cumbreTrack?.("profile_load_failed", {
