@@ -4,32 +4,66 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <title>Prueba de apertura en Chrome · Cumbre</title>
+  <title>Pruebas móviles · Cumbre</title>
   <link rel="stylesheet" href="assets/css/prueba-chrome.css">
+  <script src="assets/js/prueba-chrome.js" defer></script>
 </head>
 <body>
   <main class="test-card">
     <div class="brand-mark" aria-hidden="true">C</div>
     <p class="eyebrow">Prueba técnica de Cumbre</p>
-    <h1>Abrir en Chrome</h1>
+    <h1>Pruebas móviles</h1>
     <p class="intro">
-      Abre esta página desde Instagram en un dispositivo Android y pulsa el
-      botón. La prueba es exitosa si sales de Instagram y se abre Chrome.
+      Abre esta página desde Instagram en Android y prueba cada alternativa por
+      separado.
     </p>
 
-    <a
-      class="primary-action"
-      href="intent://cumbre-five.vercel.app/#Intent;scheme=https;package=com.android.chrome;end"
-    >
-      Abrir Cumbre en Chrome
-    </a>
+    <section class="test-section" aria-labelledby="chrome-title">
+      <p class="test-number">Prueba 1</p>
+      <h2 id="chrome-title">Abrir Chrome</h2>
+      <p>Es exitosa si sales de Instagram y Cumbre se abre en Chrome.</p>
+      <a
+        class="primary-action"
+        href="intent://cumbre-five.vercel.app/#Intent;scheme=https;package=com.android.chrome;end"
+      >
+        Abrir Cumbre en Chrome
+      </a>
+    </section>
+
+    <section class="test-section" aria-labelledby="share-title">
+      <p class="test-number">Prueba 2</p>
+      <h2 id="share-title">Compartir archivos</h2>
+      <p>
+        Cada botón intenta abrir el panel nativo de Android con un archivo
+        pequeño generado en el dispositivo.
+      </p>
+
+      <div class="share-test">
+        <button id="sharePdf" class="primary-action" type="button">
+          Probar compartir PDF
+        </button>
+        <p id="pdfResult" class="test-result" role="status" aria-live="polite">
+          Listo para probar.
+        </p>
+      </div>
+
+      <div class="share-test">
+        <button id="shareGpx" class="primary-action" type="button">
+          Probar compartir GPX
+        </button>
+        <p id="gpxResult" class="test-result" role="status" aria-live="polite">
+          Listo para probar.
+        </p>
+      </div>
+    </section>
 
     <section class="result-help" aria-labelledby="result-title">
-      <h2 id="result-title">¿Qué resultado obtuviste?</h2>
+      <h2 id="result-title">Cómo interpretar el resultado</h2>
       <ul>
-        <li><strong>Se abrió Chrome:</strong> la transferencia es compatible.</li>
-        <li><strong>No ocurrió nada:</strong> Instagram bloqueó el intento.</li>
-        <li><strong>Sigues en Instagram:</strong> el enlace fue ignorado.</li>
+        <li><strong>Se abrió el panel:</strong> el formato es compatible.</li>
+        <li><strong>No compatible:</strong> Instagram no acepta ese formato.</li>
+        <li><strong>Acción bloqueada:</strong> el navegador impidió compartir.</li>
+        <li><strong>Prueba cancelada:</strong> cerraste el panel; sí funciona.</li>
       </ul>
     </section>
 

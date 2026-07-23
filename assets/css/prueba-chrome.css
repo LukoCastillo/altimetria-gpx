@@ -66,19 +66,24 @@ h1 {
 .primary-action,
 .secondary-action {
   display: flex;
+  width: 100%;
   min-height: 52px;
   align-items: center;
   justify-content: center;
+  padding: 12px 18px;
   border-radius: 14px;
+  font: inherit;
   font-weight: 800;
   text-align: center;
   text-decoration: none;
 }
 
 .primary-action {
+  border: 0;
   color: #fff;
   background: #596747;
   box-shadow: 0 8px 20px rgba(89, 103, 71, .24);
+  cursor: pointer;
 }
 
 .primary-action:focus-visible,
@@ -87,8 +92,64 @@ h1 {
   outline-offset: 3px;
 }
 
+.primary-action:disabled {
+  cursor: wait;
+  opacity: .68;
+}
+
+.test-section {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid #dfdbce;
+  border-radius: 18px;
+}
+
+.test-section h2 {
+  margin: 2px 0 8px;
+  font-size: 21px;
+}
+
+.test-section > p:not(.test-number) {
+  margin: 0 0 18px;
+  color: #626456;
+  line-height: 1.5;
+}
+
+.test-number {
+  margin: 0;
+  color: #8a6840;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.share-test + .share-test {
+  margin-top: 16px;
+}
+
+.test-result {
+  min-height: 21px;
+  margin: 8px 2px 0;
+  color: #626456;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.test-result[data-state="success"] {
+  color: #3f6037;
+}
+
+.test-result[data-state="warning"] {
+  color: #8a5b23;
+}
+
+.test-result[data-state="error"] {
+  color: #9b3f34;
+}
+
 .result-help {
-  margin: 28px 0 18px;
+  margin: 20px 0 18px;
   padding: 20px;
   border-radius: 16px;
   background: #f5f3eb;
