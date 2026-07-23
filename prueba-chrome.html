@@ -57,6 +57,32 @@
       </div>
     </section>
 
+    <section class="test-section" aria-labelledby="automatic-title">
+      <p class="test-number">Prueba 3</p>
+      <h2 id="automatic-title">Abrir Chrome y descargar</h2>
+      <p>
+        Comprueba si un solo toque puede salir de Instagram e iniciar
+        automáticamente la descarga de un GPX en Chrome.
+      </p>
+
+      <a
+        id="autoGpxIntent"
+        class="primary-action"
+        href="intent://cumbre-five.vercel.app/prueba-chrome?auto=gpx#Intent;scheme=https;package=com.android.chrome;end"
+      >
+        Abrir Chrome y descargar GPX
+      </a>
+
+      <div id="autoDownloadStatus" class="auto-download-status hidden">
+        <p id="autoResult" class="test-result" role="status" aria-live="polite">
+          Preparando la prueba automática…
+        </p>
+        <button id="manualAutoGpx" class="secondary-action" type="button">
+          Descargar GPX manualmente
+        </button>
+      </div>
+    </section>
+
     <section class="result-help" aria-labelledby="result-title">
       <h2 id="result-title">Cómo interpretar el resultado</h2>
       <ul>
@@ -64,6 +90,7 @@
         <li><strong>No compatible:</strong> Instagram no acepta ese formato.</li>
         <li><strong>Acción bloqueada:</strong> el navegador impidió compartir.</li>
         <li><strong>Prueba cancelada:</strong> cerraste el panel; sí funciona.</li>
+        <li><strong>GPX en Descargas:</strong> la descarga automática funciona.</li>
       </ul>
     </section>
 

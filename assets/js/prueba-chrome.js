@@ -56,6 +56,20 @@
     element.dataset.state = state;
   }
 
+  function downloadFile(file) {
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name;
+    link.hidden = true;
+    document.body.appendChild(link);
+    link.click();
+    window.setTimeout(() => {
+      link.remove();
+      URL.revokeObjectURL(url);
+    }, 5000);
+  }
+
   async function testShare(button, result, createFile) {
     if (
       typeof File !== "function" ||
@@ -127,6 +141,10 @@
   const gpxButton = document.querySelector("#shareGpx");
   const pdfResult = document.querySelector("#pdfResult");
   const gpxResult = document.querySelector("#gpxResult");
+  const autoGpxIntent = document.querySelector("#autoGpxIntent");
+  const autoDownloadStatus = document.querySelector("#autoDownloadStatus");
+  const autoResult = document.querySelector("#autoResult");
+  const manualAutoGpx = document.querySelector("#manualAutoGpx");
 
   pdfButton.addEventListener("click", () => {
     testShare(pdfButton, pdfResult, buildTestPdf);
@@ -135,4 +153,33 @@
   gpxButton.addEventListener("click", () => {
     testShare(gpxButton, gpxResult, buildTestGpx);
   });
+
+  manualAutoGpx.addEventListener("click", () => {
+    downloadFile(buildTestGpx());
+    setResult(
+      autoResult,
+      "Descarga manual iniciada. Revisa la carpeta Descargas.",
+      "success",
+    );
+  });
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("auto") === "gpx") {
+    autoGpxIntent.classList.add("hidden");
+    autoDownloadStatus.classList.remove("hidden");
+    setResult(
+      autoResult,
+      "Chrome abierto. Intentando descargar el GPX automáticamente…",
+      "success",
+    );
+
+    window.setTimeout(() => {
+      downloadFile(buildTestGpx());
+      setResult(
+        autoResult,
+        "Intento automático ejecutado. Revisa la carpeta Descargas; si no aparece, usa el botón manual.",
+        "success",
+      );
+    }, 300);
+  }
 })();
